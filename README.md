@@ -46,12 +46,14 @@ aluno. A tela é uma só; quem decide o que aparece depois é o token, que carre
 tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
 `/salas` para o professor, `/em-breve` para o aluno, que ainda não tem área.
 
-| Rota           | Quem entra                          |
-| -------------- | ----------------------------------- |
-| `/login`       | qualquer um                         |
-| `/salas`       | professor — tela provisória da Etapa 03 |
-| `/conta/senha` | qualquer um autenticado            |
-| `/em-breve`    | aluno — área em construção até a Etapa 08 |
+| Rota                    | Quem entra                          |
+| ----------------------- | ----------------------------------- |
+| `/login`                | qualquer um                         |
+| `/salas`                | professor — lista de salas por escola |
+| `/salas/:salaId`        | professor — sala, lecionamentos e inscrição |
+| `/salas/:salaId/alunos` | professor — alunos da sala e cadastro |
+| `/conta/senha`          | qualquer um autenticado             |
+| `/em-breve`             | aluno — área em construção até a Etapa 08 |
 
 ### Onde a sessão mora
 
@@ -70,6 +72,39 @@ para lá depois de entrar.
 formulário). `POST /auth/trocar-senha` devolve 401 com "Senha atual incorreta",
 que é o segundo caso — sem a marcação `semSessaoAoExpirar` nessa chamada, o
 professor errava a senha atual e era expulso para o login.
+
+## Salas, lecionamento e alunos (Etapa 03)
+
+Depois do login, o professor cai em `/salas`. Salas são **compartilhadas** entre
+os professores da mesma escola: a lista não é "minhas salas", é "salas das
+escolas em que atuo", com o indicador "Você leciona aqui" (tem lecionamento) ou
+"Disponível para inscrição" (ainda não). Como o professor pode atuar em mais de
+uma escola, a lista é agrupada por escola.
+
+A inscrição numa sala (`POST /salas/:salaId/inscricao`) é o que declara os
+componentes curriculares que ele leciona ali, e é o que dá origem à competição
+(Etapa 04). A senha inicial do aluno cadastrado é o próprio código de matrícula
+gerado (`26XXX`); o modal de confirmação é a única vez que esse código aparece
+junto com a explicação, então ele fica em destaque e com botão de copiar.
+
+### Limites da API que moldam a tela
+
+Estas lacunas foram confirmadas na API e explicam decisões de interface que, sem
+a nota, pareceriam bugs:
+
+- **Não existe `GET /escolas` nem vínculo de escolas do professor.** As escolas
+  oferecidas no formulário de nova sala são deduplicadas de `GET /salas`; um
+  professor sem nenhuma sala não tem de onde escolher escola, e o formulário
+  diz isso em vez de mostrar um select vazio.
+- **Não existe `GET /salas/:id`.** O detalhe procura a sala em `GET /salas`,
+  que o professor acabou de carregar e é pequena.
+- **`GET /salas` não diz quem está inscrito.** Cada sala custa uma chamada extra
+  a `GET /salas/:salaId/lecionamentos` para descobrir se o professor da sessão
+  leciona nela. Uma falha nessa chamada secundária não esconde a sala: ela
+  aparece sem o indicador de inscrição.
+- **`POST /salas` não inscreve o criador.** A sala recém-criada aparece marcada
+  como "Disponível para inscrição"; o critério da Etapa 03 de vê-la "marcada como
+  leciona aqui" exigiria mudança na API.
 
 ## Testes
 
@@ -91,8 +126,8 @@ desligar o mock do anterior.
 | ------------------------------ | --------------------------------------------------- |
 | `src/test/setup.ts`            | jest-dom, servidor msw no ar e limpeza de sessão     |
 | `src/test/server.ts`           | o `setupServer` do msw, sem handlers                 |
-| `src/test/handlers.ts`         | fábricas de handler de autenticação, por cenário     |
-| `src/test/render.tsx`          | renderiza com `AuthProvider` e `MemoryRouter`        |
+| `src/test/handlers.ts`         | fábricas de handler de autenticação e de sala, por cenário |
+| `src/test/render.tsx`          | renderiza com `ToastProvider`, `AuthProvider` e `MemoryRouter` |
 
 Dois pontos que valem saber antes de escrever o próximo teste:
 
@@ -130,16 +165,17 @@ do professor.
 ```
 src/
   app/         rotas e providers globais
-    pages/     telas provisórias (/salas e /em-breve), uma por destino de rota
-  components/  componentes reutilizáveis (Button, Card, Table, Field, Toast)
-  features/    uma pasta por domínio — `auth` por enquanto
+    pages/     telas provisórias ainda fora de feature (/em-breve)
+  components/  componentes reutilizáveis (Button, Card, Table, Field, Modal, Toast)
+  features/    uma pasta por domínio
     auth/      telas de login e troca de senha, contexto de sessão, rotas
+    salas/     listagem, detalhe, inscrição e alunos — a Etapa 03
   lib/         cliente HTTP, guarda da sessão, utilitários
   styles/      tokens de design e estilos globais
   test/        base dos testes: msw, setup e utilitários de render
 ```
 
-`src/components/Table.tsx`, `Spinner` e o sistema de toast já existem desde a
-Etapa 01, mas ainda não têm tela que os use: a Etapa 02 é toda formulário, e o
-erro e a confirmação ficam no formulário, perto do campo que os causou. O toast
-entra junto com a primeira listagem, na Etapa 03.
+`Table`, `Spinner` e o toast, criados na Etapa 01, ganharam uso na Etapa 03: as
+listagens de salas e alunos são tabelas, o `carregando` de `useRequisicao`
+alimenta o esqueleto do `Table`, e o toast confirma criação de sala, inscrição e
+cadastro de aluno. O `Modal` também estreou aqui, no código de matrícula.

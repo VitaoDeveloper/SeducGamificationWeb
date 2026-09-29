@@ -1,10 +1,16 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../components'
 import { AuthProvider, LoginPage, ROTA_LOGIN, rotaInicial, TrocarSenhaPage, useAuth } from '../features/auth'
+import {
+  AlunosListPage,
+  ROTA_SALAS_ALUNOS,
+  ROTA_SALAS_DETALHE,
+  SalaDetailPage,
+  SalasListPage,
+} from '../features/salas'
 import { AuthenticatedLayout } from './AuthenticatedLayout'
 import { ProtectedRoute } from './ProtectedRoute'
 import { EmBrevePage } from './pages/EmBrevePage'
-import { SalasPage } from './pages/SalasPage'
 
 /**
  * Raiz `/` e qualquer caminho desconhecido: leva para a tela inicial do perfil,
@@ -40,7 +46,14 @@ export function App() {
               }
             >
               <Route index element={<RotaInicial />} />
-              <Route path="salas" element={<SalasPage />} />
+              <Route path="salas" element={<SalasListPage />} />
+              {/*
+                A ordem não resolve nada aqui: o react-router casa a rota mais
+                específica primeiro, então `salas/:salaId/alunos` nunca é
+                engolido por `salas/:salaId`.
+              */}
+              <Route path={ROTA_SALAS_ALUNOS} element={<AlunosListPage />} />
+              <Route path={ROTA_SALAS_DETALHE} element={<SalaDetailPage />} />
               <Route path="conta/senha" element={<TrocarSenhaPage />} />
               <Route path="em-breve" element={<EmBrevePage />} />
             </Route>
