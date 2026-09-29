@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Fontes empacotadas: os arquivos entram no bundle, então a interface abre
+   igual sem depender de Google Fonts em tempo de execução. Poppins 600/700
+   para títulos, Inter 400/500/600 para texto de corpo e controles.
+
+   Só o subset latino é importado. A instalação traz também cyrillic,
+   devanagari e latin-ext, que somam centenas de KB e não servem para nada em
+   uma interface em português. */
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-700.css';
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    /* Fundo neutro, não o gradiente: as telas de trabalho (listagens,
+       formulários, tabelas) são o dia a dia do professor. O gradiente
+       institucional é exceção, usado por conta própria. */
+    @apply bg-neutral-50 text-neutral-800 font-sans antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display font-bold text-neutral-800;
+  }
+
+  /* Foco visível e consistente: anel na cor de destaque, que tem 5.85:1
+     sobre branco. Só aparece na navegação por teclado. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent-600;
+  }
+
+  /* Remove o contorno azul nativo em favor do anel acima. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+@layer components {
+  /* Gradiente institucional da referência. Classe única para não repetir a
+     lista de cores em cada tela e para o uso ser fácil de auditar: só a tela
+     de login e o cabeçalho do dashboard devem aplicá-la. */
+  .bg-institucional {
+    background-image: linear-gradient(
+      160deg,
+      var(--color-institucional-from),
+      var(--color-institucional-to)
+    );
+  }
+}

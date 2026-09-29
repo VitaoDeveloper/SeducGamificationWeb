@@ -1,0 +1,102 @@
+/*
+ * Tokens de design do Seduc Gamification Web.
+ *
+ * Fonte única de verdade de cor, tipografia e forma. Nenhum componente deve
+ * escrever uma cor literal no className: se surgir uma necessidade nova, ela
+ * vira um token aqui, com nome e comentário, para as próximas etapas
+ * reaproveitarem em vez de redefinirem.
+ *
+ * Contraste: os tons de marca 500 (primary e accent) ficam abaixo de 4.5:1
+ * com texto branco, então não vão como preenchimento de botão com texto
+ * branco. Para texto branco sobre cor cheia, use sempre 600 ou mais escuro,
+ * que passam de AA. As razões estão anotadas token a token.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Marca — azul-petróleo/ciano
+ * Identidade da interface: ações secundárias, links, barras de destaque,
+ * estados de foco e a família de tons frios das telas de trabalho.
+ * ------------------------------------------------------------------------- */
+@theme {
+  --color-primary-50: #eaf8f9;
+  --color-primary-100: #e3f4f5; /* fundo suave, tom da referência */
+  --color-primary-200: #bfe6e8;
+  --color-primary-300: #8bd2d6;
+  --color-primary-400: #46b3bb;
+  --color-primary-500: #0e8a94; /* cor primária da referência */
+  --color-primary-600: #0b6e76; /* hover e texto: 5.99:1 com branco */
+  --color-primary-700: #095a61; /* 7.93:1 com branco */
+  --color-primary-800: #073f45;
+  --color-primary-900: #06343a;
+
+  /* -------------------------------------------------------------------------
+   * Marca — magenta/pink
+   * Cor de destaque. Reservada para o que o professor precisa enxergar antes
+   * do resto: ação principal, erro de validação, barra de destaque em
+   * contexto de competição e o fundo de destaque das telas institucionais.
+   * ------------------------------------------------------------------------- */
+  --color-accent-50: #fdebf4;
+  --color-accent-100: #fbd8e8;
+  --color-accent-200: #f6b0d0;
+  --color-accent-300: #f080b3;
+  --color-accent-400: #ec4a94;
+  --color-accent-500: #e6197a; /* destaque da referência: 4.39:1 com branco */
+  --color-accent-600: #c21467; /* hover e preenchimento com branco: 5.85:1 */
+  --color-accent-700: #9a1053; /* 8.16:1 com branco */
+
+  /* -------------------------------------------------------------------------
+   * Neutros
+   * Sobrem esta escala que as telas de trabalho são desenhadas: listagens,
+   * formulários e tabelas ficam em branco e cinza, para não cansar no uso
+   * diário. As famílias coloridas entram como detalhe, não como fundo.
+   * ------------------------------------------------------------------------- */
+  --color-neutral-50: #fafafa; /* fundo padrão da página */
+  --color-neutral-100: #f3f3f5;
+  --color-neutral-200: #e5e5ea; /* divisórias e bordas decorativas */
+  --color-neutral-300: #d2d2da;
+  --color-neutral-400: #a3a3ae;
+  --color-neutral-500: #5b5b63; /* texto secundário: 6.73:1 em branco */
+  --color-neutral-600: #45454c;
+  --color-neutral-700: #2e2e34;
+  --color-neutral-800: #1a1a1e; /* texto principal: 17.35:1 em branco */
+  --color-neutral-900: #121216;
+
+  --color-surface: #ffffff; /* superfície de card, tabela e formulário */
+
+  /* -------------------------------------------------------------------------
+   * Linhas
+   * Separadas da família neutra porque cumprem requisitos diferentes:
+   * a borda de um card é decorativa e pode ser quase invisível (1.26:1), mas
+   * a borda de um campo de formulário é o que identifica o controle e precisa
+   * de 3:1 (WCAG 1.4.11). Por isso existem dois tons.
+   * ------------------------------------------------------------------------- */
+  --color-line: #e5e5ea; /* divisórias, borda de card e de tabela */
+  --color-line-strong: #8b8b95; /* borda de controle: 3.37:1 em branco */
+
+  /* -------------------------------------------------------------------------
+   * Fundo institucional
+   * Gradiente lilás-rosado claro da referência. Usar com moderação: tela de
+   * login e cabeçalho do dashboard. Nada de listagem ou formulário.
+   * ------------------------------------------------------------------------- */
+  --color-institucional-from: #f4eef3;
+  --color-institucional-to: #ece7f0;
+
+  /* -------------------------------------------------------------------------
+   * Tipografia
+   * Títulos em peso forte da geométrica; corpo em sans-serif de leitura.
+   * Fontes empacotadas via @fontsource (self-hosted), sem chamada externa em
+   * produção.
+   * ------------------------------------------------------------------------- */
+  --font-display: 'Poppins', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* -------------------------------------------------------------------------
+   * Forma
+   * Cartes com canto moderado. Botões e pílulas usam rounded-full, que é um
+   * raio total e não precisa de token.
+   * ------------------------------------------------------------------------- */
+  --radius-card: 0.875rem;
+
+  --shadow-card: 0 1px 2px rgb(26 26 30 / 0.04), 0 8px 24px -12px rgb(26 26 30 / 0.12);
+  --shadow-pop: 0 8px 32px -8px rgb(26 26 30 / 0.24);
+}
