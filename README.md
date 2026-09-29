@@ -13,6 +13,11 @@ cp .env.example .env   # ajuste VITE_API_BASE_URL
 pnpm dev
 ```
 
+> O `.env` precisa apontar para uma API que responda. O `seduc-gamification.vercel.app`
+> hoje é um deploy de preenchimento: responde `Hello World!` em `/` e 500 em
+> `/auth/login`. Para desenvolver contra a API local, use
+> `VITE_API_BASE_URL=http://localhost:3000`.
+
 | Script            | O que faz                                       |
 | ----------------- | ----------------------------------------------- |
 | `pnpm dev`        | Servidor de desenvolvimento                    |
@@ -31,6 +36,38 @@ porta com `strictPort`, de propósito: se a 5173 estiver ocupada e o Vite subir
 na 5174, o navegador bloqueia o preflight e a interface deixa de falar com a
 API sem nenhuma mensagem de erro no console do Vite. Com `strictPort`, o
 dev server falha na inicialização, o que é um problema visível.
+
+## Autenticação
+
+O login é por **código de matrícula** (padrão `26XXX`), o mesmo para professor e
+aluno. A tela é uma só; quem decide o que aparece depois é o token, que carrega o
+tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
+`/salas` para o professor, `/em-breve` para o aluno, que ainda não tem área.
+
+| Rota           | Quem entra                          |
+| -------------- | ----------------------------------- |
+| `/login`       | qualquer um                         |
+| `/salas`       | professor — tela provisória da Etapa 03 |
+| `/conta/senha` | qualquer um autenticado            |
+| `/em-breve`    | aluno — área em construção até a Etapa 08 |
+
+### Onde a sessão mora
+
+`src/lib/sessao.ts` guarda token e usuário, fora do React, porque dois
+consumidores precisam ler isso e um deles não é componente: o interceptor de
+`src/lib/api.ts` e o `AuthProvider`. A dependência fica de baixo para cima — o
+provider conhece a guarda, nunca o contrário.
+
+O 401 não recarrega a página: o interceptor chama `limparSessao()`, o
+`AuthProvider` acorda com o usuário nulo, o `ProtectedRoute` redireciona para o
+login e guarda em `state` a rota que a pessoa tentava abrir, para ela voltar
+para lá depois de entrar.
+
+**401 tem dois significados na API**, e a distinção importa: token expirado
+(derruba a sessão) e credencial recusada no corpo da requisição (é erro do
+formulário). `POST /auth/trocar-senha` devolve 401 com "Senha atual incorreta",
+que é o segundo caso — sem a marcação `semSessaoAoExpirar` nessa chamada, o
+professor errava a senha atual e era expulso para o login.
 
 ## Design system
 
@@ -58,11 +95,15 @@ do professor.
 ```
 src/
   app/         rotas e providers globais
+    pages/     telas provisórias (/salas e /em-breve), uma por destino de rota
   components/  componentes reutilizáveis (Button, Card, Table, Field, Toast)
-  features/    uma pasta por domínio — entra a partir da Etapa 02
-  lib/         cliente HTTP, guarda do token, utilitários
+  features/    uma pasta por domínio — `auth` por enquanto
+    auth/      telas de login e troca de senha, contexto de sessão, rotas
+  lib/         cliente HTTP, guarda da sessão, utilitários
   styles/      tokens de design e estilos globais
 ```
 
-`src/app/pages/ShowcasePage.tsx` é a página de validação dos tokens, e é
-temporária: sai quando a tela de login entrar na rota `/`, na Etapa 02.
+`src/components/Table.tsx`, `Spinner` e o sistema de toast já existem desde a
+Etapa 01, mas ainda não têm tela que os use: a Etapa 02 é toda formulário, e o
+erro e a confirmação ficam no formulário, perto do campo que os causou. O toast
+entra junto com a primeira listagem, na Etapa 03.
