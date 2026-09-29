@@ -24,6 +24,8 @@ pnpm dev
 | `pnpm build`      | Typecheck (`tsc -b`) e build de produção        |
 | `pnpm preview`    | Serve o build de produção                       |
 | `pnpm lint`       | oxlint                                          |
+| `pnpm test`       | Vitest, uma vez (`vitest run`)                  |
+| `pnpm test:watch` | Vitest em modo watch                            |
 
 A API não tem prefixo global de rota, então `VITE_API_BASE_URL` é só a origem
 (`http://localhost:3000`) e os caminhos das chamadas são relativos à raiz
@@ -69,6 +71,39 @@ formulário). `POST /auth/trocar-senha` devolve 401 com "Senha atual incorreta",
 que é o segundo caso — sem a marcação `semSessaoAoExpirar` nessa chamada, o
 professor errava a senha atual e era expulso para o login.
 
+## Testes
+
+Vitest + Testing Library + `msw`, na mesma convenção do backend
+(`SeducGamification`): o arquivo de teste fica **ao lado** do arquivo testado,
+como `NomeDoArquivo.spec.ts` / `.spec.tsx`.
+
+```bash
+pnpm test
+```
+
+A API não precisa estar rodando. Quem responde às requisições é o `msw`, e
+`src/test/server.ts` nasce **sem handlers**: cada teste declara os seus com
+`server.use(...)` e o `resetHandlers` desfaz tudo depois. Um handler fixo no
+servidor compartilhado valeria para a suíte inteira, e um teste esqueceria de
+desligar o mock do anterior.
+
+| Arquivo                        | O que é                                             |
+| ------------------------------ | --------------------------------------------------- |
+| `src/test/setup.ts`            | jest-dom, servidor msw no ar e limpeza de sessão     |
+| `src/test/server.ts`           | o `setupServer` do msw, sem handlers                 |
+| `src/test/handlers.ts`         | fábricas de handler de autenticação, por cenário     |
+| `src/test/render.tsx`          | renderiza com `AuthProvider` e `MemoryRouter`        |
+
+Dois pontos que valem saber antes de escrever o próximo teste:
+
+- **A sessão precisa ser limpa entre os testes.** `src/lib/sessao.ts` guarda o
+  token numa variável de módulo, que sobrevive de um teste para o outro no mesmo
+  arquivo. O `beforeEach` do `setup.ts` faz isso; um teste que grava sessão e
+  esquece de limpar derruba o seguinte.
+- **Uma requisição sem handler é erro, não papel.** O msw está com
+  `onUnhandledRequest: 'error'`, para o teste que esqueceu de mockar a API
+  falhar em vez de passar por uma resposta vazia.
+
 ## Design system
 
 Os tokens de cor, tipografia, forma e sombra ficam em
@@ -101,6 +136,7 @@ src/
     auth/      telas de login e troca de senha, contexto de sessão, rotas
   lib/         cliente HTTP, guarda da sessão, utilitários
   styles/      tokens de design e estilos globais
+  test/        base dos testes: msw, setup e utilitários de render
 ```
 
 `src/components/Table.tsx`, `Spinner` e o sistema de toast já existem desde a

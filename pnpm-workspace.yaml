@@ -1,0 +1,4 @@
+allowBuilds:
+  # O postinstall do msw só imprime um aviso sobre `msw init`, que não é usado
+  # aqui (os testes usam o servidor criado em src/test/server.ts).
+  msw: false
