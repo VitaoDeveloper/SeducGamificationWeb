@@ -2,6 +2,13 @@ import { http, HttpResponse } from 'msw'
 import { TIPO_USUARIO } from '../lib/sessao'
 import type { TipoUsuario } from '../lib/sessao'
 import type { Aluno, EscolaResumo, Lecionamento, Sala } from '../features/salas'
+import { SITUACAO_BIMESTRE } from '../features/competicoes/competicoes.tipos'
+import type {
+  Bimestre,
+  CompeticaoCompleta,
+  GrupoCompetidor,
+  MembroDoGrupo,
+} from '../features/competicoes/competicoes.tipos'
 
 /**
  * Handlers de autenticação para os testes, em forma de fábrica.
@@ -157,3 +164,81 @@ export function salasDoProfessor(
 export function semSalas() {
   return salasDoProfessor([])
 }
+
+/* ------------------------------------------------------------ competições -- */
+
+const CRIADO_EM = '2026-01-15T12:00:00.000Z'
+
+export function bimestre(
+  parcial: Partial<Bimestre> & Pick<Bimestre, 'id' | 'numero'>,
+): Bimestre {
+  return {
+    competicaoId: 'comp-1',
+    dataInicio: '2026-02-01T00:00:00.000Z',
+    dataFim: '2026-04-30T00:00:00.000Z',
+    situacao: SITUACAO_BIMESTRE.ABERTO,
+    createdAt: CRIADO_EM,
+    updatedAt: CRIADO_EM,
+    ...parcial,
+  }
+}
+
+/** Os quatro bimestres encaixados, como `POST /competicoes` os cria. */
+export function bimestresDaCompeticao(competicaoId: string): Bimestre[] {
+  const periodos: Array<[string, string]> = [
+    ['2026-02-01T00:00:00.000Z', '2026-04-30T00:00:00.000Z'],
+    ['2026-05-01T00:00:00.000Z', '2026-07-15T00:00:00.000Z'],
+    ['2026-08-01T00:00:00.000Z', '2026-10-15T00:00:00.000Z'],
+    ['2026-10-16T00:00:00.000Z', '2026-12-20T00:00:00.000Z'],
+  ]
+
+  return periodos.map(([dataInicio, dataFim], indice) =>
+    bimestre({
+      id: `${competicaoId}-b${indice + 1}`,
+      competicaoId,
+      numero: indice + 1,
+      dataInicio,
+      dataFim,
+    }),
+  )
+}
+
+export function competicao(
+  parcial: Partial<CompeticaoCompleta> & Pick<CompeticaoCompleta, 'id' | 'nome'>,
+): CompeticaoCompleta {
+  return {
+    lecionamentoId: 'lec-1',
+    bimestres: [],
+    gruposCompetidores: [],
+    createdAt: CRIADO_EM,
+    updatedAt: CRIADO_EM,
+    ...parcial,
+  }
+}
+
+export function grupo(
+  parcial: Partial<GrupoCompetidor> & Pick<GrupoCompetidor, 'id' | 'nome'>,
+): GrupoCompetidor {
+  return {
+    competicaoId: 'comp-1',
+    createdAt: CRIADO_EM,
+    updatedAt: CRIADO_EM,
+    ...parcial,
+  }
+}
+
+/**
+ * Vínculo de um aluno a um grupo no bimestre, com o aluno embutido.
+ *
+ * Recebe o aluno inteiro (a fábrica `aluno` já existe) em vez de só o id: a API
+ * devolve `membrosGrupos[].aluno` junto, e é o nome dele que a tela desenha.
+ */
+export function membro(grupoId: string, aluno: Aluno, bimestreId: string): MembroDoGrupo {
+  return {
+    grupoId,
+    alunoId: aluno.id,
+    bimestreId,
+    aluno: { id: aluno.id, nome: aluno.nome, codigoMatricula: aluno.codigoMatricula },
+  }
+}
+

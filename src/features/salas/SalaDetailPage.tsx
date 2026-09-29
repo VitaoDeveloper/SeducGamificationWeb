@@ -2,13 +2,10 @@ import { Link, useParams } from 'react-router-dom'
 import { Alert, Badge, Button, Card, CardTitle, PageHeader, Spinner, Table, useToast } from '../../components'
 import type { TableColumn } from '../../components'
 import { InscricaoForm } from './InscricaoForm'
+import { AbasDaSala } from './AbasDaSala'
 import { rotaDosAlunos } from './rotas'
 import { useLecionamentos, useSala } from './salas.hooks'
 import type { Lecionamento } from './salas.tipos'
-
-const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
-const ABA_ATIVA = 'bg-primary-50 text-primary-700'
-const ABA_INATIVA = 'text-neutral-600 hover:bg-neutral-100'
 
 /**
  * Detalhe da sala: quem leciona nela e, se o professor ainda não estiver
@@ -82,26 +79,7 @@ export function SalaDetailPage() {
         }
       />
 
-      <nav aria-label="Seções da sala" className="border-line mt-5 flex flex-wrap gap-1 border-b pb-3">
-        <span className={ABA_INATIVA + ' px-3.5 py-2 text-sm font-semibold'}>
-          Lecionamentos
-        </span>
-        <Link to={rotaDosAlunos(dados.id)} className={`${ABA} ${ABA_ATIVA}`}>
-          Alunos
-        </Link>
-        {/*
-         * A competição é criada por lecionamento (Etapa 04), e por isso a aba
-         * ainda não existe. Fica visível e desabilitada para deixar claro que
-         * a sala avança — sem um link que não vai a lugar nenhum.
-         */}
-        <span
-          aria-disabled
-          title="Chega na Etapa 04"
-          className={`${ABA} cursor-not-allowed text-neutral-400`}
-        >
-          Competições
-        </span>
-      </nav>
+      <AbasDaSala salaId={dados.id} atual="lecionamentos" />
 
       <div className="mt-6 space-y-6">
         {meu ? (

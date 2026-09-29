@@ -52,6 +52,8 @@ tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
 | `/salas`                | professor — lista de salas por escola |
 | `/salas/:salaId`        | professor — sala, lecionamentos e inscrição |
 | `/salas/:salaId/alunos` | professor — alunos da sala e cadastro |
+| `/salas/:salaId/competicoes` | professor — competições de cada lecionamento da sala |
+| `/competicoes/:competicaoId` | professor — bimestres, grupos e composição por bimestre |
 | `/conta/senha`          | qualquer um autenticado             |
 | `/em-breve`             | aluno — área em construção até a Etapa 08 |
 
@@ -105,6 +107,38 @@ a nota, pareceriam bugs:
 - **`POST /salas` não inscreve o criador.** A sala recém-criada aparece marcada
   como "Disponível para inscrição"; o critério da Etapa 03 de vê-la "marcada como
   leciona aqui" exigiria mudança na API.
+
+## Competição, bimestres e grupos (Etapa 04)
+
+A competição nasce de um **lecionamento** (professor + sala), então a aba
+"Competições" da sala lista uma seção por lecionamento: o professor vê as
+competições dos colegas e só oferece "Nova competição" onde ele mesmo leciona.
+Cada competição tem exatamente **4 bimestres**, com as datas definidas de uma vez
+na criação (`POST /competicoes` não aceita competição sem os quatro).
+
+O detalhe (`/competicoes/:competicaoId`) gira em torno de **qual bimestre está em
+exibição**: a página abre no bimestre aberto mais recente (e no primeiro, se não
+houver nenhum aberto) e um seletor troca a lista de grupos e a composição. Grupos
+são equipes que atravessam o ano; um aluno pode mudar de equipe entre bimestres
+ou dentro do bimestre atual, enquanto ele estiver aberto. Com o bimestre
+`ENCERRADO`, os controles de composição ficam desabilitados e só de leitura.
+
+Decisões que valem conhecer:
+
+- **Trocar de grupo é remover e adicionar.** A API não tem uma rota de "troca":
+  `GerenciarMembros` faz `DELETE` do vínculo antigo e `POST` no novo, e devolve o
+  aluno ao grupo antigo se o novo vínculo falhar — sem isso, ele ficaria sem
+  grupo nenhum. O `select` de cada aluno é controlado pelos dados do servidor,
+  não por estado local, então a interface nunca o mostra em dois grupos.
+- **A composição é um `select` por aluno.** Como o vínculo é triplo (grupo,
+  aluno, bimestre) e um aluno só cabe em um grupo por bimestre, "de quem é este
+  aluno?" é exatamente o que um select responde.
+- **A validação das datas é testada isoladamente.** `validarBimestres`
+  (`features/competicoes/bimestres.ts`) é pura e devolve o erro por bimestre e o
+  erro de conjunto (sobreposição/ordem); o formulário só a liga aos campos.
+- **A sala do detalhe é deduzida do lecionamento.** Não há `GET /lecionamentos/:id`
+  nem `GET /salas/:id`, então `useSalaDoLecionamento` procura o lecionamento nas
+  salas do professor para achar a lista de alunos.
 
 ## Testes
 
@@ -170,6 +204,7 @@ src/
   features/    uma pasta por domínio
     auth/      telas de login e troca de senha, contexto de sessão, rotas
     salas/     listagem, detalhe, inscrição e alunos — a Etapa 03
+    competicoes/ competição, bimestres, grupos e composição — a Etapa 04
   lib/         cliente HTTP, guarda da sessão, utilitários
   styles/      tokens de design e estilos globais
   test/        base dos testes: msw, setup e utilitários de render
@@ -179,3 +214,8 @@ src/
 listagens de salas e alunos são tabelas, o `carregando` de `useRequisicao`
 alimenta o esqueleto do `Table`, e o toast confirma criação de sala, inscrição e
 cadastro de aluno. O `Modal` também estreou aqui, no código de matrícula.
+
+A Etapa 04 reusa a mesma base: as abas da sala saíram de `SalaDetailPage` para
+`AbasDaSala` (as três telas da sala agora compartilham a barra), o `Badge`
+estreou no estado Aberto/Encerrado do bimestre, e o toast passou a confirmar
+criação de competição e de grupo.

@@ -13,6 +13,7 @@
  */
 export const ROTA_SALAS_DETALHE = '/salas/:salaId'
 export const ROTA_SALAS_ALUNOS = '/salas/:salaId/alunos'
+export const ROTA_SALAS_COMPETICOES = '/salas/:salaId/competicoes'
 
 /** `/salas/{id}` — dados da sala, lecionamentos e inscrição. */
 export function rotaDaSala(salaId: string): string {
@@ -22,4 +23,9 @@ export function rotaDaSala(salaId: string): string {
 /** `/salas/{id}/alunos` — listagem e cadastro de alunos. */
 export function rotaDosAlunos(salaId: string): string {
   return `${rotaDaSala(salaId)}/alunos`
+}
+
+/** `/salas/{id}/competicoes` — competições de cada lecionamento da sala. */
+export function rotaDasCompeticoes(salaId: string): string {
+  return `${rotaDaSala(salaId)}/competicoes`
 }

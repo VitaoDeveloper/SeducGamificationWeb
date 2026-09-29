@@ -2,8 +2,14 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../components'
 import { AuthProvider, LoginPage, ROTA_LOGIN, rotaInicial, TrocarSenhaPage, useAuth } from '../features/auth'
 import {
+  CompeticaoDetailPage,
+  CompeticoesDaSala,
+  ROTA_COMPETICAO_DETALHE,
+} from '../features/competicoes'
+import {
   AlunosListPage,
   ROTA_SALAS_ALUNOS,
+  ROTA_SALAS_COMPETICOES,
   ROTA_SALAS_DETALHE,
   SalaDetailPage,
   SalasListPage,
@@ -53,7 +59,9 @@ export function App() {
                 engolido por `salas/:salaId`.
               */}
               <Route path={ROTA_SALAS_ALUNOS} element={<AlunosListPage />} />
+              <Route path={ROTA_SALAS_COMPETICOES} element={<CompeticoesDaSala />} />
               <Route path={ROTA_SALAS_DETALHE} element={<SalaDetailPage />} />
+              <Route path={ROTA_COMPETICAO_DETALHE} element={<CompeticaoDetailPage />} />
               <Route path="conta/senha" element={<TrocarSenhaPage />} />
               <Route path="em-breve" element={<EmBrevePage />} />
             </Route>
