@@ -1,9 +1,10 @@
 # Plano de Implementação (GUI) — SeducGamification Front-end
 
-**Versão:** 0.2 — agora com 11 etapas, uma para cada etapa já desenvolvida na API.
+**Versão:** 0.3 — 11 etapas, uma para cada etapa já desenvolvida na API, com testes unitários (Vitest) desde a Etapa 02.
 **Repositório:** novo, a criar do zero (ex.: `SeducGamification-web`)
 **Stack decidida:** React + TypeScript, via **Vite**. Estilização a critério do agente (Tailwind CSS recomendado — ver Etapa 01). Chamadas à API com **Axios puro**, sem lib de cache/revalidação — o estado de dados fica em React (Context + hooks).
 **Backend:** API em `SeducGamification` (NestJS), conforme `plano-implementacao/` (11 etapas). **Cada etapa da GUI abaixo tem uma etapa correspondente na API** — implementar (ou pelo menos ter disponível para testar contra) a etapa da API antes ou junto da etapa equivalente da GUI.
+**Testes:** Vitest + Testing Library + `msw` (para simular a API), no mesmo espírito do backend. A configuração é feita na Etapa 02 (a Etapa 01 cuida só do setup visual); da Etapa 02 em diante, cada etapa tem sua própria seção "Testes automatizados (Vitest)", com o comando `npm run test` como critério de aceite adicional.
 **Referência visual:** prints enviados por Paulo (site pessoal de um professor parceiro do projeto) — só a linguagem visual (paleta, tipografia, forma dos componentes), não o conteúdo. Detalhada na Etapa 01.
 
 ## Como usar estes arquivos

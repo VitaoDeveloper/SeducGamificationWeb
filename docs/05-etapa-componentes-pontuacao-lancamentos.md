@@ -16,12 +16,20 @@ Os componentes de pontuação são definidos **por matéria e por bimestre**, co
 4. Alunos sem nota lançada aparecem com o campo vazio, sem bloquear o salvamento dos demais (a API já trata ausência como 0 no cálculo).
 5. Bloquear toda a tela de lançamentos (campos desabilitados, com uma mensagem) se o bimestre estiver `ENCERRADO`.
 
+## Testes automatizados (Vitest)
+
+- Indicador de peso por matéria ("100% ✓" / "faltam X%"): testar como função pura a partir de uma lista de componentes com pesos, e depois integrado ao componente que a exibe.
+- `NovoComponenteForm`: testar validação local (peso numérico, matéria obrigatória) e o envio via `msw`.
+- Tabela de lançamentos: testar que o campo de nota muda de formato (numérico vs. seletor de rótulos) conforme o modelo de avaliação mockado, e que o envio em lote monta o payload esperado pela API.
+- Testar que a tela fica somente leitura quando o bimestre está `ENCERRADO` (campos desabilitados, ação de salvar bloqueada).
+
 ## Critérios de aceite
 
 - Criar componentes cuja soma dê 100% numa matéria mostra o indicador de "fechado"; criar menos que isso mostra quanto falta.
 - Lançar notas de vários alunos de uma vez, em lote, e salvar funciona.
 - Lançar uma nota fora da escala do modelo (se o agente optar por também validar no front, além do backend) é barrado antes de enviar; de todo modo, um erro vindo da API é exibido de forma clara.
 - Com o bimestre encerrado, a tela de componentes e lançamentos fica somente leitura.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

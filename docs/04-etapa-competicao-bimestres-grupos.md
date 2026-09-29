@@ -16,6 +16,13 @@ A competição nasce de um lecionamento (professor + sala). Um lecionamento pode
 4. **Criar grupo** (`NovoGrupoForm.tsx`): nome do grupo. `POST /competicoes/:id/grupos`.
 5. **Gerenciar membros do grupo:** dentro do grupo, para o bimestre selecionado, uma lista de alunos da sala com um seletor de qual grupo cada um está (ou um componente de arrastar/soltar, à escolha do agente — uma lista com um `select` por aluno é suficiente para o alpha). Trocar o grupo de um aluno chama a rota de troca/remoção + adição. Bloquear a edição (desabilitar os controles, com uma mensagem) se o bimestre selecionado estiver `ENCERRADO`.
 
+## Testes automatizados (Vitest)
+
+- Função pura de validação das datas dos 4 bimestres (ordem crescente, sem sobreposição): testar isoladamente, com casos válidos e inválidos, antes mesmo de ligar ao formulário.
+- `NovaCompeticaoForm`: testar que a validação acima bloqueia o envio quando as datas estão erradas, e que o envio funciona (via `msw`) quando estão corretas.
+- Gerenciamento de membros do grupo: testar que a interface impede (ou trata o erro de) colocar o mesmo aluno em dois grupos no mesmo bimestre, e que os controles ficam desabilitados quando o bimestre está `ENCERRADO`.
+- `CompeticaoDetailPage`: testar a troca de bimestre selecionado atualizando a lista de grupos exibida (mockando respostas diferentes por `bimestreId`).
+
 ## Critérios de aceite
 
 - Criar uma competição a partir de um lecionamento gera os 4 bimestres corretamente, visíveis no detalhe.
@@ -23,6 +30,7 @@ A competição nasce de um lecionamento (professor + sala). Um lecionamento pode
 - Tentar colocar um aluno em dois grupos no mesmo bimestre é impedido pela própria interface (ou mostra o erro da API de forma clara, se a validação ficar só no backend).
 - Trocar um aluno de grupo, no bimestre aberto, reflete imediatamente na tela.
 - Com o bimestre selecionado marcado como encerrado (simulado via API/banco de teste), os controles de composição de grupo ficam desabilitados.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

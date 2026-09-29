@@ -19,6 +19,13 @@ Cadastrar um aluno cria a pessoa e a matrícula na sala ao mesmo tempo. A senha 
 5. **Listagem de alunos da sala** (`AlunosListPage.tsx`, rota `/salas/:id/alunos`): busca `GET /salas/:salaId/alunos`. Ação principal: "Novo aluno".
 6. **Cadastrar aluno** (`NovoAlunoForm.tsx`): campo nome. `POST /salas/:salaId/alunos`. Ao ter sucesso, mostrar modal de confirmação com nome, código de matrícula e a informação de que a senha inicial é esse mesmo código, com botão de copiar.
 
+## Testes automatizados (Vitest)
+
+- `NovaSalaForm` e `InscricaoForm`: testar validação local (campos obrigatórios, pelo menos um componente curricular) e o envio via `msw` (sucesso e erro, ex.: 403).
+- `NovoAlunoForm`: testar que, após sucesso, o modal de confirmação exibe o `codigoMatricula` retornado pela API mockada.
+- `SalasListPage`: testar o agrupamento por escola e a marcação "leciona aqui" vs. "disponível para inscrição", a partir de uma resposta mockada de `GET /salas` com mais de uma escola.
+- Estados de carregamento e lista vazia das páginas de listagem (salas e alunos).
+
 ## Critérios de aceite
 
 - Professor cria uma sala e ela aparece imediatamente marcada como "leciona aqui".
@@ -26,6 +33,7 @@ Cadastrar um aluno cria a pessoa e a matrícula na sala ao mesmo tempo. A senha 
 - Tentar se inscrever de novo numa sala já inscrita mostra o erro da API de forma legível.
 - Cadastrar um aluno mostra o código de matrícula com destaque e ele aparece na listagem da sala.
 - Cadastrar vários alunos em sequência funciona sem recarregar a página.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

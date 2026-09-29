@@ -16,12 +16,20 @@ Esta é a primeira etapa em que o **aluno** também usa uma tela de verdade (at�
    - Reaproveitar os mesmos componentes de tabela de ranking do item 1, num layout mais simples (o aluno não precisa dos controles de gestão, só de visualização).
 3. Indicar claramente, nos rankings anual e individual, quando o resultado é **parcial** (nem todos os 4 bimestres encerrados) — usar o campo `bimestresEncerrados` da resposta da API.
 
+## Testes automatizados (Vitest)
+
+- Testar a renderização da tabela de ranking com dados mockados contendo empate (`empate: true`), conferindo o destaque visual.
+- Testar a exibição de "resultado parcial" quando `bimestresEncerrados` é menor que 4, nos rankings anual e individual.
+- `AlunoDashboardPage`: testar que exibe o ranking do grupo do aluno logado (mockado) sem exigir navegação manual.
+- Testar o tratamento de uma resposta 403 (aluno tentando ver dado fora do seu escopo): mensagem amigável, sem quebrar a página.
+
 ## Critérios de aceite
 
 - Professor vê os três rankings de uma competição com pelo menos 2 bimestres encerrados, e o anual/individual indicam claramente que o resultado ainda é parcial.
 - Um cenário com grupos empatados mostra o destaque de empate nos três rankings.
 - Aluno logado, ao entrar, vê o ranking do próprio grupo sem precisar navegar manualmente até a competição.
 - Aluno não consegue (nem visualmente, nem por URL direta, na medida do que o front controla) acessar rankings de outra sala/competição — o mínimo aqui é a API bloquear isso (403) e a interface tratar esse erro sem quebrar.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

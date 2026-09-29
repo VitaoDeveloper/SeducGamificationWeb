@@ -18,12 +18,19 @@ São quatro relatórios, com escopo diferente por perfil: o **aluno** só acessa
 6. **Tratamento de erro de acesso (403):** se o back recusar (aluno tentando ver relatório de outro grupo, por exemplo), mostrar uma mensagem clara de acesso não permitido, sem expor detalhes técnicos.
 7. Para gráficos, usar uma lib leve já comum no ecossistema React (ex.: `recharts`), documentando a escolha — não é necessário nada mais sofisticado que linhas/barras simples neste alpha.
 
+## Testes automatizados (Vitest)
+
+- Testar, para cada um dos quatro relatórios, a renderização com dados mockados (`msw`), incluindo o caso de erro 403 (mensagem amigável, sem detalhe técnico).
+- Testar a função/formatador que mantém separadas a escala bimestral (0-10) e a pontuação final do grupo (soma, até 40) — garantir que nenhum lugar do código soma ou mistura as duas por engano.
+- Testar a navegação a partir da página da competição e do dashboard do aluno até os relatórios corretos (ex.: o link do aluno sempre aponta para o próprio relatório, nunca para o de outro).
+
 ## Critérios de aceite
 
 - Professor acessa os quatro relatórios de um grupo/aluno de uma competição sua.
 - Aluno acessa o próprio relatório individual e os do seu grupo, e recebe uma mensagem clara (não um erro técnico) ao tentar acessar o de outro grupo.
 - As comparações anuais mostram os valores bimestre a bimestre (0-10) e a pontuação final do grupo (até 40) em blocos visualmente separados.
 - Os gráficos renderizam corretamente com uma competição de teste com pelo menos 2 bimestres encerrados.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

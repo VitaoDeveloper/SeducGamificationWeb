@@ -16,11 +16,18 @@ Esta é a última etapa da rodada atual do plano de GUI, fechando a paridade com
 4. **Tratamento de erro:** se a geração falhar, mostrar uma mensagem de erro (toast), sem travar a página.
 5. **Nome do arquivo baixado:** algo legível, incluindo o nome do aluno/grupo e o tipo de relatório (ex.: `relatorio-individual-joao-silva.pdf`), lido do header `Content-Disposition` da resposta se a API o fornecer, ou montado no front a partir dos dados já carregados na tela.
 
+## Testes automatizados (Vitest)
+
+- Testar a função utilitária de download (mockando a resposta em blob do Axios): dispara o download com o nome de arquivo esperado.
+- Testar o estado de carregamento do botão "Baixar PDF" durante a chamada, e o retorno ao estado normal em caso de sucesso e de erro.
+- Testar o tratamento de uma falha na geração (erro da API mockado): mostra o toast de erro, sem travar a página.
+
 ## Critérios de aceite
 
 - Os quatro botões de download funcionam e geram um PDF válido, para uma competição de teste com pelo menos 2 bimestres encerrados.
 - O botão mostra estado de carregamento durante a geração e volta ao normal depois, com sucesso ou erro.
 - Uma falha simulada (ex.: desligar a API momentaneamente) mostra uma mensagem de erro clara, sem quebrar a navegação da página.
+- `npm run test` passa, cobrindo os casos da seção de testes automatizados.
 
 ## Fora de escopo
 

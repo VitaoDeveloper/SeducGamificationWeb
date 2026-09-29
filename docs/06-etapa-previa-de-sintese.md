@@ -15,10 +15,17 @@ A API só grava as sínteses de verdade no momento do encerramento do bimestre (
    - Síntese bimestral do aluno: média simples entre as matérias.
    - Síntese bimestral do grupo: média simples entre os integrantes (conforme a composição do bimestre selecionado).
    - Arredondamento para 2 casas decimais.
-   - Escrever com testes (`sinteseCalculo.test.ts`, usando o runner que o projeto já tiver configurado) reaproveitando os mesmos exemplos numéricos do doc `03`, para garantir que o front calcula exatamente igual ao back.
+   - Escrever com testes (`sinteseCalculo.spec.ts`, usando o Vitest configurado na Etapa 02) reaproveitando os mesmos exemplos numéricos do doc `03`, para garantir que o front calcula exatamente igual ao back.
 2. **Coluna "Prévia" na tabela de lançamentos** (Etapa 05): ao lado de cada aluno, mostrar a síntese daquela matéria calculada ao vivo, atualizando conforme o professor digita as notas (antes mesmo de salvar, usando o estado local do formulário).
 3. **Painel "Prévia da síntese do bimestre"**, na página da competição (Etapa 04), com uma tabela: aluno → síntese bimestral (média entre as matérias já lançadas) e grupo → síntese bimestral (média dos integrantes). Buscar os lançamentos de todos os componentes do bimestre selecionado (uma ou mais chamadas a `GET /componentes-pontuacao/:id/lancamentos`) e aplicar o utilitário do item 1.
 4. Deixar textualmente claro, em qualquer lugar que mostre esses valores, que é uma **prévia**, sujeita a mudar até o encerramento do bimestre (ex.: um rótulo "Prévia — sujeita a alteração até o encerramento", ou um ícone com tooltip).
+
+## Testes automatizados (Vitest)
+
+Esta etapa já previa testes do utilitário de cálculo (item 1 das Tarefas, em `sinteseCalculo.spec.ts`, seguindo agora a extensão `.spec.ts` para consistência com o restante do projeto) — os exemplos do doc `03` continuam sendo a referência obrigatória. Além disso:
+
+- Testar a coluna "Prévia" da tabela de lançamentos: dado um conjunto de notas digitadas (sem salvar), o valor exibido bate com o utilitário de cálculo.
+- Testar o painel "Prévia da síntese do bimestre" com dados mockados de lançamentos de mais de uma matéria, conferindo a média entre elas.
 
 ## Critérios de aceite
 
@@ -26,6 +33,7 @@ A API só grava as sínteses de verdade no momento do encerramento do bimestre (
 - Ao digitar notas na tela de lançamentos (Etapa 05), a coluna de prévia atualiza sem precisar salvar.
 - O painel de prévia do bimestre mostra valores que, aplicados manualmente à mão com os mesmos dados, batem com o resultado da tela.
 - Nenhum lugar da interface apresenta esses valores como se fossem definitivos.
+- `npm run test` passa, incluindo os testes do utilitário de cálculo batendo com os exemplos do doc `03`.
 
 ## Fora de escopo
 
