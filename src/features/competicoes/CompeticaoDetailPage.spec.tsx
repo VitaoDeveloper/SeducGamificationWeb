@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { Route, Routes } from 'react-router-dom'
@@ -15,6 +15,7 @@ import {
   competicao,
   componentesDoBimestre as componentesDoBimestreResposta,
   grupo,
+  lancamento,
   lecionamento,
   listagemDeLancamentos,
   materiaFechada,
@@ -26,6 +27,7 @@ import {
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import { CompeticaoDetailPage } from './CompeticaoDetailPage'
 import { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
+import type { Lancamento } from './componentes-pontuacao.tipos'
 
 const SALA = sala({ id: 'sala-1', nome: '2º DS', escola: ESCOLA_A })
 
@@ -199,11 +201,35 @@ describe('CompeticaoDetailPage', () => {
     renderizarDetalhe()
     await screen.findAllByText('Alpha')
 
-    const rankings = screen.getByTitle('Chega na Etapa 06')
+    // A prévia é a Etapa 06, e ela já está na barra; o ranking é o que vem depois.
+    const rankings = screen.getByTitle('Chega na Etapa 08')
     expect(rankings).toHaveTextContent('Rankings')
     expect(rankings).toHaveAttribute('aria-disabled', 'true')
     // Não é um `button`, então nem dá para focar por teclado e clicar por engano.
     expect(rankings.tagName).toBe('SPAN')
+  })
+
+  it('abre a prévia da síntese na aba própria, com as notas já lançadas', async () => {
+    const pessoa = userEvent.setup()
+    // A escola do cenário não tem modelo exposto pela API, então a tela assume o
+    // CPS ETEC: o "B" da Ana vale 8 na conta. Como o componente pesa 100%, a
+    // síntese da matéria é a própria nota.
+    server.use(
+      ...cenario(),
+      ...componentesDoBimestre([lancamento('mat-1-cp1', ALUNOS[0]!, 'B')]),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+    await screen.findAllByText('Alpha')
+
+    await pessoa.click(screen.getByRole('tab', { name: 'Prévia' }))
+
+    expect(screen.getByRole('tab', { name: 'Prévia' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('columnheader', { name: 'Matemática' })).toBeInTheDocument()
+    // Com uma matéria só no bimestre, a síntese dela e a bimestral são o mesmo
+    // número: a coluna da matéria e a da média mostram os dois 8,00.
+    expect(within(await screen.findByRole('row', { name: /^Ana/ })).getAllByText('8.00')).toHaveLength(2)
   })
 
   it('descarta o componente escolhido ao trocar de bimestre', async () => {
@@ -231,7 +257,7 @@ describe('CompeticaoDetailPage', () => {
 })
 
 /** Os dois endpoints de componentes que as abas novas consomem. */
-function componentesDoBimestre() {
+function componentesDoBimestre(notas: Lancamento[] = []) {
   return [
     http.get(`${API}/bimestres/:id/componentes-pontuacao`, ({ params }) =>
       HttpResponse.json(
@@ -241,6 +267,6 @@ function componentesDoBimestre() {
     http.post(`${API}/bimestres/:id/componentes-pontuacao/validar`, () =>
       HttpResponse.json(validacaoDePesos([MATEMATICA_FECHADA])),
     ),
-    ...listagemDeLancamentos([]),
+    ...listagemDeLancamentos(notas),
   ]
 }

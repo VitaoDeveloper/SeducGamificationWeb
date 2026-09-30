@@ -1,18 +1,33 @@
 import { useState } from 'react'
 import { Alert, Button, Input, Select, Table, useToast } from '../../components'
 import type { TableColumn } from '../../components'
+import { formatarSintese } from '../../lib/sinteseCalculo'
 import { mensagemDeErro } from '../../lib/erro-api'
 import { lancarNota, lancarNotasEmLote } from './componentes-pontuacao.api'
-import { useLancamentos } from './componentes-pontuacao.hooks'
+import { useLancamentos, useLancamentosDeComponentes } from './componentes-pontuacao.hooks'
+import { sinteseDaMateriaPorAluno } from './previa-sintese'
 import { validarNotas } from './notas'
 import { ESCALA_NUMERICA, ehEscalaNumerica } from './modelo-avaliacao'
+import type { NotaPendente } from './previa-sintese'
 import type { ModeloAvaliacao } from './modelo-avaliacao'
 import type { NotaDigitada } from './notas'
-import type { ComponentePontuacaoDoBimestre } from './componentes-pontuacao.tipos'
+import type { ComponentePontuacaoDoBimestre, MateriaComPesos } from './componentes-pontuacao.tipos'
 import type { Aluno } from '../salas/salas.tipos'
+
+/** Texto que a coluna de prévia repete, para ninguém ler o número como oficial. */
+export const AVISO_DE_PREVIA =
+  'Prévia — sujeita a alteração até o encerramento do bimestre.'
 
 export interface TabelaDeLancamentosProps {
   componente: ComponentePontuacaoDoBimestre
+  /**
+   * A matéria a que o componente pertence, com os outros componentes dela.
+   *
+   * A prévia da coluna é a síntese da **matéria**, não a deste componente: para
+   * somar os pesos o front precisa das notas que os irmãos da prova já têm, e
+   * quem sabe quais são é a matéria, não o componente solto.
+   */
+  materia: MateriaComPesos
   /** Todos os matriculados na sala: a nota em branco é aluno sem lançamento. */
   alunos: Aluno[]
   /** Modelo da escola — define se o campo é número ou seletor de rótulos. */
@@ -28,6 +43,8 @@ interface LinhaDeLancamento {
   erro?: string
   /** A nota da linha foi mexida depois do último salvamento. */
   editada: boolean
+  /** Síntese da matéria com o que está no campo agora — a prévia da linha. */
+  previa: string
 }
 
 /** Registro sem uma chave, para tirar o estado de uma linha sem mutar o objeto. */
@@ -40,7 +57,7 @@ function semChave(registro: Record<string, string>, chave: string): Record<strin
 /**
  * Lançamento das notas de um componente, uma linha por aluno da sala.
  *
- * Duas decisões que valem conhecer:
+ * Três decisões que valem conhecer:
  *
  * 1. **O que está no campo vem do servidor, e o que o professor digitou fica por
  *    cima.** O valor efetivo é `editados[alunoId] ?? valor já salvo`. Assim uma
@@ -52,9 +69,16 @@ function semChave(registro: Record<string, string>, chave: string): Record<strin
  *    caso comum e não pode obrigar o professor a salvar 30 vezes; retocar um nome
  *    sem mexer nos outros também é comum, e por isso cada linha que foi mexida
  *    ganha o seu próprio botão, que só acende quando a linha mudou de verdade.
+ * 3. **A coluna de prévia lê o mesmo `editados`, e não uma cópia.** É o estado
+ *    local do formulário, então o número anda junto com a digitação, sem esperar
+ *    o "Salvar". E a prévia da matéria sai somando o peso *deste* componente com
+ *    as notas já lançadas nos irmãos, que vêm de `useLancamentosDeComponentes` —
+ *    por isso os dois hooks dividem o trabalho: este traz o componente em edição,
+ *    o outro traz os irmãos, e o componente não é buscado duas vezes.
  */
 export function TabelaDeLancamentos({
   componente,
+  materia,
   alunos,
   modelo,
   encerrado,
@@ -72,6 +96,18 @@ export function TabelaDeLancamentos({
     salvosPorAluno.set(lancamento.alunoId, lancamento.valorNoModelo)
   }
 
+  /*
+   * Só os irmãos entram na busca: as notas deste componente já estão em
+   * `lancamentos`, e buscá-las de novo seria a mesma requisição duas vezes para
+   * a mesma linha. A lista é ordenada para a chave do `useRequisicao` não mudar
+   * por causa da ordem em que a matéria devolveu os componentes.
+   */
+  const idsDosIrmãos = materia.componentesPontuacao
+    .filter((outro) => outro.id !== componente.id)
+    .map((outro) => outro.id)
+    .sort()
+  const notasDosIrmãos = useLancamentosDeComponentes(idsDosIrmãos)
+
   function valorDe(alunoId: string): string {
     return editados[alunoId] ?? salvosPorAluno.get(alunoId) ?? ''
   }
@@ -84,6 +120,42 @@ export function TabelaDeLancamentos({
   function notasDigitadas(): NotaDigitada[] {
     return alunos.map((aluno) => ({ alunoId: aluno.id, valor: valorDe(aluno.id) }))
   }
+
+  /**
+   * A síntese da matéria por aluno, com o que está no campo agora.
+   *
+   * São as notas salvas de todos os componentes da matéria — as deste, que já
+   * estão em `lancamentos`, e as dos irmãos, que vieram em `notasDosIrmãos` — com
+   * o que foi digitado por cima. É o que `sinteseDaMateriaPorAluno` espera, e a
+   * lista de `pendentes` sai do próprio estado `editados`, que é a única fonte
+   * que muda enquanto o professor digita.
+   */
+  function previaPorAluno(): Map<string, number> {
+    const lancamentosPorComponente = new Map(notasDosIrmãos.dados ?? [])
+    lancamentosPorComponente.set(componente.id, lancamentos.dados ?? [])
+
+    const pendentes: NotaPendente[] = Object.entries(editados).map(([alunoId, valor]) => ({
+      componentePontuacaoId: componente.id,
+      alunoId,
+      valor,
+    }))
+
+    return sinteseDaMateriaPorAluno({
+      materia,
+      lancamentosPorComponente,
+      alunos,
+      modelo,
+      pendentes,
+    })
+  }
+
+  /*
+   * Enquanto qualquer nota da matéria não chega, a prévia fica fora em vez de
+   * mostrar a conta pela metade: um componente da matéria sem as notas carregadas
+   * entraria como 0 e a linha piscaria entre um número e outro conforme cada
+   * requisição responde.
+   */
+  const previa = lancamentos.carregando || notasDosIrmãos.carregando ? null : previaPorAluno()
 
   async function salvarLote() {
     if (enviando) return
@@ -165,8 +237,45 @@ export function TabelaDeLancamentos({
       valor,
       erro: erros[aluno.id],
       editada: editados[aluno.id] !== undefined && editados[aluno.id] !== salvosPorAluno.get(aluno.id),
+      previa: previa ? formatarSintese(previa.get(aluno.id) ?? 0) : '…',
     }
   })
+
+  /*
+   * A coluna de prévia só existe com o bimestre aberto. Encerrado, quem manda no
+   * número é a síntese que a API gravou, e a Etapa 06 deixa explicitamente fora do
+   * escopo recalcular isso no front — mostrar aqui uma conta feita no navegador,
+   * com o modelo de avaliação que a tela assumiu, seria apresentar um segundo
+   * valor para a mesma coisa.
+   */
+  const colunaPrevia: TableColumn<LinhaDeLancamento> = {
+    key: 'previa',
+    header: (
+      /*
+       * O cabeçalho carrega o aviso inteiro, e não só a palavra "Prévia": quem
+       * bate o olho na coluna precisa ler que o número ainda vai mudar. O `title`
+       * repete para o mouse, e o rodapé da tabela cobre o leitor de tela.
+       */
+      <span title={`Síntese de ${materia.materiaNome}. ${AVISO_DE_PREVIA}`}>
+        <span className="block">Prévia</span>
+        <span className="text-neutral-400 block text-[0.65rem] font-medium normal-case">
+          {materia.materiaNome}
+        </span>
+      </span>
+    ),
+    className: 'w-28',
+    align: 'right',
+    hideBelow: 'md',
+    cell: (linha) => (
+      /*
+       * Sem `aria-label`: quem lê a tabela por leitor de tela já ouve o
+       * cabeçalho da coluna antes do número, e um rótulo por linha repetiria o
+       * mesmo texto trinta vezes. O "…" é o estado em que as notas da matéria
+       * ainda não chegaram.
+       */
+      <span className="text-neutral-600 font-medium tabular-nums">{linha.previa}</span>
+    ),
+  }
 
   const colunas: TableColumn<LinhaDeLancamento>[] = [
     {
@@ -225,6 +334,7 @@ export function TabelaDeLancamentos({
         </div>
       ),
     },
+    ...(encerrado ? [] : [colunaPrevia]),
     {
       key: 'salvar',
       header: <span className="sr-only">Salvar a nota desta linha</span>,
@@ -260,6 +370,20 @@ export function TabelaDeLancamentos({
 
       {lancamentos.erro ? <Alert tone="erro">{lancamentos.erro}</Alert> : null}
 
+      {/*
+       * Falha só dos irmãos: as notas deste componente continuam carregadas e
+       * lançáveis, então o aviso é sobre a prévia, não sobre a tela inteira. Sem
+       * ele a coluna viraria "…" para sempre, sem explicação.
+       */}
+      {notasDosIrmãos.erro && !encerrado ? (
+        <Alert tone="erro">
+          {notasDosIrmãos.erro} A prévia da matéria fica sem os componentes{" "}
+          {idsDosIrmãos.length === 1 ? 'declarado' : 'declarados'}:{' '}
+          {materia.materiaNome} tem {materia.componentesPontuacao.length}{' '}
+          {materia.componentesPontuacao.length === 1 ? 'componente' : 'componentes'}.
+        </Alert>
+      ) : null}
+
       <Table
         columns={colunas}
         rows={linhas}
@@ -286,6 +410,17 @@ export function TabelaDeLancamentos({
               Salvar lançamentos
             </Button>
           </div>
+
+          {/*
+           * O aviso da prévia fica sempre visível enquanto o bimestre estiver
+           * aberto, e não só quando há coluna: ele é o que separa, na tela, um
+           * número calculado no navegador do valor que a API grava no
+           * encerramento.
+           */}
+          <p className="text-neutral-500 text-xs">
+            A coluna <strong>Prévia</strong> mostra a síntese de {materia.materiaNome} já
+            com o que você digitou, sem precisar salvar. {AVISO_DE_PREVIA}
+          </p>
 
           {pendentes > 0 ? (
             <p className="text-neutral-500 text-xs">

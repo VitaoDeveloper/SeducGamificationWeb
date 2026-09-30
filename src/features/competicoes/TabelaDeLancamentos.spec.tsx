@@ -4,9 +4,19 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../../test/server'
 import { renderComSessao } from '../../test/render'
-import { API, aluno, componentePontuacao, lancamento, lancamentosDoComponente, listagemDeLancamentos } from '../../test/handlers'
+import {
+  API,
+  aluno,
+  componentePontuacao,
+  lancamento,
+  lancamentosDoComponente,
+  listagemDeLancamentos,
+  materia,
+} from '../../test/handlers'
+import { formatarSintese, sinteseDaMateria } from '../../lib/sinteseCalculo'
 import { MODELO_CPS_ETEC, MODELO_NUMERICO } from './modelo-avaliacao'
 import { TabelaDeLancamentos } from './TabelaDeLancamentos'
+import type { Lancamento, MateriaComPesos } from './componentes-pontuacao.tipos'
 
 const ANA = aluno({ id: 'a1', nome: 'Ana', codigoMatricula: '26010' })
 const BIA = aluno({ id: 'a2', nome: 'Bia', codigoMatricula: '26011' })
@@ -21,6 +31,38 @@ const COMPONENTE = componentePontuacao({
   componenteCurricularId: 'mat-1',
 })
 
+/**
+ * A matéria a que o componente pertence.
+ *
+ * Entra com um componente só, e é o `COMPONENTE` de verdade: a prévia soma os
+ * pesos da matéria, e com um componente só ela dá a própria nota. Os cenários com
+ * mais de um componente montam a matéria na hora, com `materiaDe`.
+ */
+const MATERIA = materiaDe([{ id: 'cp-1', nome: 'Prova bimestral', pesoPercentual: 100 }])
+
+/** Uma matéria com os componentes que o cenário pedir, sempre em "Matemática". */
+function materiaDe(
+  componentes: Array<{ id: string; nome: string; pesoPercentual: number }>,
+): MateriaComPesos {
+  return materia(
+    { componenteCurricularId: 'mat-1', materiaNome: 'Matemática' },
+    componentes.map((componente) => componentePontuacao({ ...componente, componenteCurricularId: 'mat-1' })),
+  )
+}
+
+/**
+ * A matéria do doc 03: Prova 50%, Caderno 20%, Projeto 30%.
+ *
+ * O componente em lançamento é o primeiro, e os outros dois vêm de lançamento já
+ * salvo — que é o cenário real: o professor lança a prova e a prévia precisa
+ * levar em conta o caderno e o projeto que ele fechou antes.
+ */
+const MATERIA_DO_DOC = materiaDe([
+  { id: 'cp-1', nome: 'Prova', pesoPercentual: 50 },
+  { id: 'cp-2', nome: 'Caderno', pesoPercentual: 20 },
+  { id: 'cp-3', nome: 'Projeto', pesoPercentual: 30 },
+])
+
 /** Um aluno por linha, para o `within` achar o botão só da linha que mudou. */
 function linhaDe(nome: string) {
   return screen.getByRole('row', { name: new RegExp(nome) })
@@ -33,6 +75,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -58,6 +101,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_CPS_ETEC}
         encerrado={false}
@@ -83,6 +127,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -110,6 +155,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -150,6 +196,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -173,6 +220,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -201,6 +249,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -239,6 +288,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -260,6 +310,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={ALUNOS}
         modelo={MODELO_NUMERICO}
         encerrado
@@ -288,6 +339,7 @@ describe('TabelaDeLancamentos', () => {
     renderComSessao(
       <TabelaDeLancamentos
         componente={COMPONENTE}
+        materia={MATERIA}
         alunos={[]}
         modelo={MODELO_NUMERICO}
         encerrado={false}
@@ -297,5 +349,189 @@ describe('TabelaDeLancamentos', () => {
     expect(
       screen.getByText(/Nenhum aluno matriculado nesta sala ainda\./),
     ).toBeInTheDocument()
+  })
+
+  /*
+   * A coluna de prévia (Etapa 06). O critério de aceite é o valor mostrado bater
+   * com o utilitário de cálculo, e a conferência é feita recalculando com
+   * `sinteseDaMateria` a partir dos mesmos lançamentos do cenário — não com o
+   * número esperado escrito à mão, que só provaria que o teste e a tela mudaram
+   * juntos.
+   */
+  describe('coluna de prévia', () => {
+    const PROVA = componentePontuacao({
+      id: 'cp-1',
+      nome: 'Prova',
+      pesoPercentual: 50,
+      componenteCurricularId: 'mat-1',
+    })
+
+    /** Os lançamentos salvos nos componentes que não estão em edição. */
+    function notasSalvasDosIrmãos(): Lancamento[] {
+      return [lancamento('cp-2', ANA, '10'), lancamento('cp-3', ANA, '6')]
+    }
+
+    /**
+     * O que a prévia da Ana deve mostrar, calculado pelo utilitário.
+     *
+     * Recebe a nota da prova como texto — o mesmo que estaria no campo — para que
+     * o teste compare a tela com a conta, e não com um número escrito à mão.
+     */
+    function previaEsperadaDaAna(notaDaProva: string | undefined): string {
+      return formatarSintese(
+        sinteseDaMateria(
+          [
+            { valorNoModelo: notaDaProva, pesoPercentual: 50 },
+            { valorNoModelo: '10', pesoPercentual: 20 },
+            { valorNoModelo: '6', pesoPercentual: 30 },
+          ],
+          { tipoEscala: 'NUMERICA', niveis: [] },
+        ),
+      )
+    }
+
+    it('acompanha a digitação, sem esperar o salvamento', async () => {
+      server.use(...lancamentosDoComponente(notasSalvasDosIrmãos(), ALUNOS))
+
+      const pessoa = userEvent.setup()
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA_DO_DOC}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      // Antes de digitar, a prévia já sai dos lançamentos que o banco tem: 10×0,2
+      // + 6×0,3 = 3,8. Sem a nota da prova, que ainda está no campo em branco.
+      const linhaDaAna = await screen.findByRole('row', { name: /Ana/ })
+      await waitFor(() =>
+        expect(within(linhaDaAna).getByText(previaEsperadaDaAna(undefined))).toBeInTheDocument(),
+      )
+      expect(previaEsperadaDaAna(undefined)).toBe('3.80')
+
+      // O exemplo do doc 03: 8×0,5 + 10×0,2 + 6×0,3 = 7,8.
+      await pessoa.type(screen.getByLabelText('Nota de Ana'), '8')
+
+      expect(await within(linhaDaAna).findByText(previaEsperadaDaAna('8'))).toBeInTheDocument()
+      expect(previaEsperadaDaAna('8')).toBe('7.80')
+    })
+
+    it('trata aluno sem lançamento como 0, e não como falta de dado', async () => {
+      server.use(...lancamentosDoComponente(notasSalvasDosIrmãos(), ALUNOS))
+
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA_DO_DOC}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      // A Bia não tem lançamento em componente nenhum da matéria: 0,00. A prévia
+      // não some e não mostra "—", porque a API trata o lançamento ausente como
+      // nota 0 e é esse o número que ela vai gravar.
+      const linhaDaBia = await screen.findByRole('row', { name: /Bia/ })
+      expect(within(linhaDaBia).getByText('0.00')).toBeInTheDocument()
+    })
+
+    /*
+     * A prévia é recalculada a cada tecla, e o campo passa por "1" e "11" enquanto
+     * o professor digita. Sem a validação do modelo na entrada da conta, o "11"
+     * entraria como 11 e a linha mostraria uma síntese que a API jamais receberia.
+     */
+    it('ignora nota fora do modelo, que a API recusaria', async () => {
+      server.use(...lancamentosDoComponente(notasSalvasDosIrmãos(), ALUNOS))
+
+      const pessoa = userEvent.setup()
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA_DO_DOC}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      const linhaDaAna = await screen.findByRole('row', { name: /Ana/ })
+      await waitFor(() =>
+        expect(within(linhaDaAna).getByText(previaEsperadaDaAna(undefined))).toBeInTheDocument(),
+      )
+
+      await pessoa.type(screen.getByLabelText('Nota de Ana'), '11')
+
+      // A prévia volta a ser a de "sem lançamento na prova": 10×0,2 + 6×0,3.
+      expect(within(linhaDaAna).getByText(previaEsperadaDaAna(undefined))).toBeInTheDocument()
+      expect(within(linhaDaAna).queryByText(previaEsperadaDaAna('11'))).not.toBeInTheDocument()
+    })
+
+    it('limpar o campo vale como sem lançamento, e não volta para a nota salva', async () => {
+      server.use(...lancamentosDoComponente([lancamento('cp-1', ANA, '8')], ALUNOS))
+
+      const pessoa = userEvent.setup()
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      const linhaDaAna = await screen.findByRole('row', { name: /Ana/ })
+      expect(within(linhaDaAna).getByText('8.00')).toBeInTheDocument()
+
+      await pessoa.clear(screen.getByLabelText('Nota de Ana'))
+
+      // 8 salvo e depois apagado no campo: o que vale é o campo, que está vazio.
+      expect(await within(linhaDaAna).findByText('0.00')).toBeInTheDocument()
+    })
+
+    /*
+     * Bimestre encerrado, a síntese é a que a API gravou. Recalcular no front
+     * mostraria um segundo número para a mesma coisa, e a Etapa 06 deixa isso fora
+     * de escopo — então a coluna inteira some, e não fica em 0.
+     */
+    it('não aparece com o bimestre encerrado', async () => {
+      server.use(...lancamentosDoComponente([lancamento('cp-1', ANA, '8')], ALUNOS))
+
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado
+        />,
+      )
+
+      await screen.findByLabelText('Nota de Ana')
+      expect(screen.queryByText('Prévia')).not.toBeInTheDocument()
+      expect(within(linhaDe('Ana')).queryByText('8.00')).not.toBeInTheDocument()
+    })
+
+    it('avisa que a coluna é uma prévia, e não a nota oficial', async () => {
+      server.use(...lancamentosDoComponente(notasSalvasDosIrmãos(), ALUNOS))
+
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA_DO_DOC}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      expect(
+        await screen.findByText(/sujeita a alteração até o encerramento do bimestre/i),
+      ).toBeInTheDocument()
+    })
   })
 })

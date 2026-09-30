@@ -12,10 +12,12 @@ export { NovoComponenteForm } from './NovoComponenteForm'
 export type { NovoComponenteFormProps } from './NovoComponenteForm'
 export { NovoGrupoForm } from './NovoGrupoForm'
 export type { NovoGrupoFormProps } from './NovoGrupoForm'
+export { PreviaDaSintese } from './PreviaDaSintese'
+export type { PreviaDaSinteseProps } from './PreviaDaSintese'
 export { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
 export { SelecaoDeBimestre } from './SelecaoDeBimestre'
 export type { SelecaoDeBimestreProps } from './SelecaoDeBimestre'
-export { TabelaDeLancamentos } from './TabelaDeLancamentos'
+export { AVISO_DE_PREVIA, TabelaDeLancamentos } from './TabelaDeLancamentos'
 export type { TabelaDeLancamentosProps } from './TabelaDeLancamentos'
 export {
   useCompeticao,
@@ -28,6 +30,7 @@ export type { ContextoDaCompeticao } from './competicoes.hooks'
 export {
   useComponentesDoBimestre,
   useLancamentos,
+  useLancamentosDeComponentes,
   useValidacaoDePesos,
 } from './componentes-pontuacao.hooks'
 export {
@@ -47,6 +50,16 @@ export {
 export type { AvaliacaoDePesos, ComponenteComPeso, ValidacaoDePeso } from './pesos'
 export { validarNotas } from './notas'
 export type { ErroDeNota, NotaDigitada, ValidacaoDasNotas } from './notas'
+export { calcularPreviaDoBimestre, sinteseDaMateriaPorAluno } from './previa-sintese'
+export type {
+  EntradaDaPrevia,
+  EntradaDaPreviaDaMateria,
+  NotaPendente,
+  PreviaDoAluno,
+  PreviaDoBimestre,
+  PreviaDoGrupo,
+  SinteseNaMateria,
+} from './previa-sintese'
 export {
   ESCALA_NUMERICA,
   MODELO_CPS_ETEC,

@@ -17,6 +17,7 @@ import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
 import { ComponentesDePontuacao } from './ComponentesDePontuacao'
 import { GerenciarMembros } from './GerenciarMembros'
 import { LancamentosDeComponente } from './LancamentosDeComponente'
+import { PreviaDaSintese } from './PreviaDaSintese'
 import { modeloAvaliacaoDaEscola } from './modelo-avaliacao'
 import { NovoGrupoForm } from './NovoGrupoForm'
 import { SelecaoDeBimestre } from './SelecaoDeBimestre'
@@ -27,7 +28,7 @@ const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
 const ABA_ATIVA = 'bg-primary-50 text-primary-700'
 
 /** As seções da competição, na ordem em que o professor monta o bimestre. */
-type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos'
+type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa'
 
 /**
  * Abas da competição, com a de rankings ainda por vir.
@@ -36,15 +37,23 @@ type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos'
  * e rankings penduram-se no mesmo "qual bimestre estou vendo". Deixar a aba futura
  * visível e desabilitada evita que a página pareça pronta e depois se reorganize
  * inteira quando a etapa chegar.
+ *
+ * "Prévia" entrou na Etapa 06 entre Lançamentos e Rankings, que é a ordem em que
+ * o professor trabalha: lança, confere como a turma está, e só depois encerra.
  */
 const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
   { id: 'grupos', rotulo: 'Grupos' },
   { id: 'componentes', rotulo: 'Componentes' },
   { id: 'lancamentos', rotulo: 'Lançamentos' },
+  { id: 'previa', rotulo: 'Prévia' },
 ]
 
-/** A aba que ainda não existe: fica visível e desabilitada, com o aviso de quando chega. */
-const ABA_A_CHEGAR = { rotulo: 'Rankings', etapa: 'Chega na Etapa 06' }
+/*
+ * A aba que ainda não existe: fica visível e desabilitada, com o aviso de quando
+ * chega. O número é o da Etapa 08 do plano desta GUI, que é onde o ranking entra —
+ * a Etapa 06 é a prévia de síntese, e ela já está na barra acima.
+ */
+const ABA_A_CHEGAR = { rotulo: 'Rankings', etapa: 'Chega na Etapa 08' }
 
 /**
  * Detalhe da competição: os quatro bimestres, os grupos, a pontuação e os lançamentos.
@@ -307,6 +316,21 @@ export function CompeticaoDetailPage() {
               componenteId={componenteEscolhido}
               onComponenteChange={setComponenteEscolhido}
               alunos={alunos.dados ?? []}
+              modelo={modelo}
+            />
+          ) : null}
+
+          {/*
+           * A prévia busca os lançamentos de todos os componentes do bimestre e
+           * cuida do próprio estado de carga e dos casos vazios: bimestre sem
+           * componente, sala sem aluno e bimestre já encerrado. A página só
+           * escolhe a linha de "carregando aluno" que a lista da sala já tem.
+           */}
+          {aba === 'previa' && bimestreAtual && !alunos.carregando ? (
+            <PreviaDaSintese
+              bimestre={bimestreAtual}
+              alunos={alunos.dados ?? []}
+              grupos={listaDeGrupos}
               modelo={modelo}
             />
           ) : null}

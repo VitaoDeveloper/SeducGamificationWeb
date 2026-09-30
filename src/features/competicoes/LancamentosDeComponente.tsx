@@ -5,7 +5,10 @@ import { formatarPercentual } from './pesos'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre } from './competicoes.tipos'
 import type { ModeloAvaliacao } from './modelo-avaliacao'
-import type { ComponentePontuacaoDoBimestre } from './componentes-pontuacao.tipos'
+import type {
+  ComponentePontuacaoDoBimestre,
+  MateriaComPesos,
+} from './componentes-pontuacao.tipos'
 import type { Aluno } from '../salas/salas.tipos'
 
 export interface LancamentosDeComponenteProps {
@@ -40,14 +43,14 @@ export function LancamentosDeComponente({
   const componentes = useComponentesDoBimestre(bimestre.id)
   const encerrado = bimestre.situacao === SITUACAO_BIMESTRE.ENCERRADO
 
-  const todos: Array<{ materiaNome: string; componente: ComponentePontuacaoDoBimestre }> = []
+  const todos: Array<{ materia: MateriaComPesos; componente: ComponentePontuacaoDoBimestre }> = []
   for (const materia of componentes.dados?.materias ?? []) {
     for (const componente of materia.componentesPontuacao) {
-      todos.push({ materiaNome: materia.materiaNome, componente })
+      todos.push({ materia, componente })
     }
   }
 
-  const selecionado = todos.find((item) => item.componente.id === componenteId)?.componente
+  const selecionado = todos.find((item) => item.componente.id === componenteId)
 
   if (componentes.carregando) {
     return (
@@ -78,9 +81,9 @@ export function LancamentosDeComponente({
       <Field label="Componente de pontuação" className="max-w-md">
         <Select value={componenteId ?? ''} onChange={(evento) => onComponenteChange(evento.target.value)}>
           <option value="">Escolha o componente…</option>
-          {todos.map(({ materiaNome, componente }) => (
+          {todos.map(({ materia, componente }) => (
             <option key={componente.id} value={componente.id}>
-              {materiaNome} — {componente.nome} ({formatarPercentual(componente.pesoPercentual)})
+              {materia.materiaNome} — {componente.nome} ({formatarPercentual(componente.pesoPercentual)})
             </option>
           ))}
         </Select>
@@ -94,10 +97,14 @@ export function LancamentosDeComponente({
            * Matemática, vai lançar a de Português e a tabela aparece já preenchida
            * com os restos da prova de Matemática — como se fossem notas de uma
            * avaliação que ele nem está mais vendo.
+           *
+           * A matéria inteira desce com o componente porque a coluna de prévia
+           * (Etapa 06) soma os pesos dos componentes irmãos, que só ela conhece.
            */}
           <TabelaDeLancamentos
-            key={selecionado.id}
-            componente={selecionado}
+            key={selecionado.componente.id}
+            componente={selecionado.componente}
+            materia={selecionado.materia}
             alunos={alunos}
             modelo={modelo}
             encerrado={encerrado}

@@ -142,9 +142,10 @@ Decisões que valem conhecer:
 
 ## Componentes de pontuação e lançamentos (Etapa 05)
 
-O detalhe da competição virou abas: **Grupos** (Etapa 04), **Componentes** e
-**Lançamentos**, com **Rankings** visível e desabilitada até a Etapa 06. As três
-penduram a mesma escolha de bimestre, e o seletor continua acima das abas.
+O detalhe da competição virou abas: **Grupos** (Etapa 04), **Componentes**,
+**Lançamentos** e **Prévia** (Etapa 06), com **Rankings** visível e desabilitada
+até a Etapa 08. As quatro penduram a mesma escolha de bimestre, e o seletor
+continua acima das abas.
 
 **Componentes** mostra um cartão por matéria com os pesos e o indicador de
 fechamento — `100% ✓` ou `faltam X%`. A soma é refeita no front e arredondada a 2
@@ -194,6 +195,67 @@ Decisões que valem conhecer:
 - **O lançamento não tem `id`.** A chave é o par `(componentePontuacaoId, alunoId)`
   e a API faz `upsert`, então relançar a nota troca a existente em vez de duplicar
   linha na tela.
+
+## Prévia da síntese (Etapa 06)
+
+A API só grava as sínteses no **encerramento** do bimestre (Etapa 07) e não
+oferece rota de "síntese parcial". A Etapa 06 calcula no navegador o que o
+encerramento vai gravar, e mostra em dois lugares: a coluna **Prévia** da tabela
+de lançamentos, que acompanha a digitação nota a nota, e a aba **Prévia** da
+competição, com a síntese do bimestre por aluno e por grupo.
+
+Nenhum dos dois números é o oficial, e a interface diz isso onde o número aparece:
+o cabeçalho da coluna e o rodapé da tabela carregam o texto de `AVISO_DE_PREVIA`
+("Prévia — sujeita a alteração até o encerramento do bimestre"), e o painel abre
+com um aviso, antes das tabelas, em vez de num rodapé.
+
+A conta mora em `src/lib/sinteseCalculo.ts` — cópia deliberada do
+`SinteseCalculoService` do backend — e a montagem dos dados, em
+`features/competicoes/previa-sintese.ts`, que é quem conhece as formas que a API
+devolve. São três camadas porque a conta é a mesma em dois lugares (coluna e
+painel) e a montagem, não.
+
+Decisões que valem conhecer:
+
+- **O arredondamento é `Number(valor.toFixed(2))`, não
+  `Math.round(valor * 100) / 100`.** Os dois divergem nos empates de meia casa, e o
+  caso é alcançável: notas `1`, `1` e `5.25` com pesos 50/20/30 dão 2.275 na
+  conta bruta — `toFixed` devolve 2.27 e `Math.round` devolve 2.28. A prévia erraria
+  justamente nos centésimos que separam dois grupos no ranking. Cada etapa
+  arredonda antes da próxima, que é o que o backend faz.
+- **A média bimestral divide por todas as matérias do lecionamento, inclusive as
+  que ainda não têm componente.** Elas valem 0 no numerador e ficam no
+  denominador, que é como `calcularSintesesDosAlunos` monta a lista. Dividir só
+  pelas matérias com nota mostraria uma prévia **maior** do que a que será
+  gravada, e o painel avisa quais matérias estão assim para a queda da média não
+  parecer reprovação em matéria que nem existe.
+- **O que está no campo ganha do que está salvo, e campo vazio vale como "sem
+  lançamento".** A prévia acompanha a digitação antes do "Salvar"; limpar o campo
+  conta como 0, e não volta para a nota antiga. Texto fora do modelo de avaliação
+  (o "8,5" e o "11" que o campo passa exibindo enquanto se digita) **não entra na
+  conta** — a API o recusaria com 400, e sem a checagem o `parseFloat` o leria
+  como 8.
+- **Grupo sem integrante mostra "—" e não 0.** O encerramento devolve esse grupo em
+  `gruposSemIntegrantes` e não grava síntese para ele; um 0 ali seria um número
+  que nunca vai existir.
+- **Bimestre encerrado não é recalculado.** Quem manda no número é a síntese que a
+  API gravou, e a Etapa 06 deixa isso fora de escopo: a coluna some da tabela e o
+  painel explica, em vez de apresentar um segundo valor para a mesma coisa.
+- **Os números são sempre mostrados com duas casas e ponto.** A vírgula decimal é
+  recusada pela API no lançamento, então mostrar vírgula aqui ensinaria o professor
+  a digitar errado — e "8.2" do lado de "8.20" parece valor diferente.
+
+### Limites da API que moldam a tela
+
+- **Não existe rota de síntese parcial.** O que a prévia faz são N chamadas a
+  `GET /componentes-pontuacao/:id/lancamentos`, uma por componente do bimestre, em
+  paralelo (`useLancamentosDeComponentes`).
+- **`modeloAvaliacao` continua sem rota.** A conta precisa converter o rótulo
+  conceito em número, e o modelo que a tela assume passou a carregar também
+  `niveis` (`I` = 3, `R` = 5, `B` = 8, `MB` = 10) — os do seed da API. Quando a
+  rota existir, o corpo de `modeloAvaliacaoDaEscola` muda e nada mais junto.
+- **Nada é gravado.** A prévia não tem salvamento; a síntese só existe depois do
+  encerramento, e vem do backend.
 
 ## Testes
 
@@ -259,8 +321,9 @@ src/
   features/    uma pasta por domínio
     auth/      telas de login e troca de senha, contexto de sessão, rotas
     salas/     listagem, detalhe, inscrição e alunos — a Etapa 03
-    competicoes/ competição, bimestres, grupos, componentes e lançamentos — as Etapas 04 e 05
-  lib/         cliente HTTP, guarda da sessão, utilitários
+    competicoes/ competição, bimestres, grupos, componentes, lançamentos e
+                prévia de síntese — as Etapas 04, 05 e 06
+  lib/         cliente HTTP, guarda da sessão, fórmulas de síntese e utilitários
   styles/      tokens de design e estilos globais
   test/        base dos testes: msw, setup e utilitários de render
 ```
@@ -280,3 +343,10 @@ A Etapa 05 acrescenta as abas da competição sobre essa mesma barra
 vira a grade de lançamento das notas, com input numérico ou `Select` de conceitos
 conforme o modelo da escola. O `Badge` ganhou o indicador de fechamento da
 matéria.
+
+A Etapa 06 não traz componente novo: ela reaproveita o `Table` nas duas pontas (a
+coluna de prévia na tabela de lançamentos e as duas tabelas do painel) e o `Badge`
+no contador de integrantes do grupo. O que ela acrescenta é
+`src/lib/sinteseCalculo.ts` — a cópia das fórmulas do backend, que fica em `lib`
+justamente para não depender de feature, porque a conta é a mesma em dois lugares
+e nenhuma delas é dona dela.

@@ -15,6 +15,7 @@
  * nem a validação, que já espelha a do backend.
  */
 
+import type { EscalaParaCalculo, NivelDaEscala } from '../../lib/sinteseCalculo'
 import type { EscolaResumo } from '../salas/salas.tipos'
 
 export const TIPO_ESCALA = {
@@ -24,11 +25,23 @@ export const TIPO_ESCALA = {
 
 export type TipoEscala = (typeof TIPO_ESCALA)[keyof typeof TIPO_ESCALA]
 
-export interface ModeloAvaliacao {
-  tipoEscala: TipoEscala
+/**
+ * O modelo de avaliação da escola, com o que a conta da síntese precisa.
+ *
+ * Estende `EscalaParaCalculo` porque a prévia de síntese (Etapa 06) converte o
+ * que foi lançado para número, e essa conversão é a do backend: no modelo
+ * numérico o valor é direto, no conceitual o rótulo vale o `valorNumerico` do
+ * nível. Sem `niveis` no modelo a tela teria os rótulos mas não os números, e a
+ * conta é feita no front.
+ */
+export interface ModeloAvaliacao extends EscalaParaCalculo {
   /**
    * Rótulos do modelo conceitual, na ordem da escala. Vazio no numérico, que não
    * tem rótulo: o professor digita o número.
+   *
+   * Derivado de `niveis` por `modeloDe`, e não escrito à mão: as duas coisas
+   * descreveriam a mesma escala, e divergirem entre si mostraria um "MB" no
+   * seletor que a conta não soube converter.
    */
   rotulos: string[]
 }
@@ -40,15 +53,30 @@ export interface ValidacaoDeValor {
 }
 
 /** Escola numérica: o professor digita a nota de 1 a 10. */
-export const MODELO_NUMERICO: ModeloAvaliacao = {
-  tipoEscala: TIPO_ESCALA.NUMERICA,
-  rotulos: [],
-}
+export const MODELO_NUMERICO: ModeloAvaliacao = modeloDe(TIPO_ESCALA.NUMERICA)
 
-/** Escola conceitual: o professor escolhe um dos rótulos da escala. */
-export const MODELO_CPS_ETEC: ModeloAvaliacao = {
-  tipoEscala: TIPO_ESCALA.CPS_ETEC,
-  rotulos: ['I', 'R', 'B', 'MB'],
+/**
+ * Escola conceitual: o professor escolhe um dos rótulos da escala.
+ *
+ * Os valores são os do seed da API (`nivelEscalas` do `modeloAvaliacao` da
+ * escola), e é com eles que o backend converte o conceito na conta da síntese.
+ * Estão aqui porque a prévia calcula no front e precisa do mesmo número.
+ */
+export const MODELO_CPS_ETEC: ModeloAvaliacao = modeloDe(TIPO_ESCALA.CPS_ETEC, [
+  { rotulo: 'I', valorNumerico: 3 },
+  { rotulo: 'R', valorNumerico: 5 },
+  { rotulo: 'B', valorNumerico: 8 },
+  { rotulo: 'MB', valorNumerico: 10 },
+])
+
+/**
+ * Monta um modelo a partir dos níveis, derivando os rótulos.
+ *
+ * Existe para os dois modelos serem escritos uma vez só: `niveis` é o que a
+ * conta lê e `rotulos` é o que o seletor da tela mostra.
+ */
+function modeloDe(tipoEscala: TipoEscala, niveis: readonly NivelDaEscala[] = []): ModeloAvaliacao {
+  return { tipoEscala, niveis, rotulos: niveis.map((nivel) => nivel.rotulo) }
 }
 
 /** Limites do `Input type="number"`, que espelham a validação do backend. */
