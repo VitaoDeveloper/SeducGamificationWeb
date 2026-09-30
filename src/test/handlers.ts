@@ -16,8 +16,15 @@ import type {
   LancarNota,
   LoteDeLancamentos,
   MateriaComPesos,
+  MateriaPendente,
   ValidacaoDePesosDaApi,
 } from '../features/competicoes/componentes-pontuacao.tipos'
+import type {
+  EmpateDoBimestre,
+  ResultadoDoEncerramento,
+  SinteseOficialDoAluno,
+  SinteseOficialDoGrupo,
+} from '../features/competicoes/encerramento.tipos'
 
 /**
  * Handlers de autenticação para os testes, em forma de fábrica.
@@ -438,5 +445,119 @@ export function lancamentosDoComponente(notas: Lancamento[], alunos: Aluno[] = [
       return HttpResponse.json(salvos, { status: 201 })
     }),
   ]
+}
+
+/* ------------------------------------------------------------- encerramento -- */
+
+/**
+ * Resposta de `POST /bimestres/:id/encerrar`, com a situação já em ENCERRADO.
+ *
+ * Fica no formato do exemplo do `README-API.md` (seção 11.9), que é o resumo
+ * fiel do que a API devolve: totais, as duas listas de síntese, os empates e o
+ * aviso de fim de competição. O que o teste não quiser que apareça, deixa
+ * vazio/null — daí os `parcial` com padrão.
+ */
+export function encerramento(
+  parcial: Partial<ResultadoDoEncerramento> &
+    Pick<ResultadoDoEncerramento, 'bimestreId' | 'numero'>,
+): ResultadoDoEncerramento {
+  return {
+    situacao: SITUACAO_BIMESTRE.ENCERRADO,
+    encerradoEm: '2026-04-10T18:00:00.000Z',
+    totais: { alunos: 0, materias: 0, grupos: 0 },
+    sinteseAluno: [],
+    sinteseGrupo: [],
+    empates: [],
+    competicaoConcluida: false,
+    pontuacoesFinais: null,
+    ...parcial,
+  }
+}
+
+/** Síntese oficial de um aluno, como o encerramento grava. */
+export function sinteseDoAluno(
+  bimestreId: string,
+  aluno: Aluno,
+  valor: number,
+): SinteseOficialDoAluno {
+  return { bimestreId, alunoId: aluno.id, nome: aluno.nome, valor }
+}
+
+/** Síntese oficial de um grupo, com quantos integrantes ele tinha no bimestre. */
+export function sinteseDoGrupo(
+  bimestreId: string,
+  id: string,
+  nome: string,
+  valor: number,
+  integrantes = 1,
+): SinteseOficialDoGrupo {
+  return { bimestreId, grupoId: id, nome, integrantes, valor }
+}
+
+/** Empate do ranking parcial: os grupos que fecharam com o mesmo valor. */
+export function empate(
+  bimestreId: string,
+  valor: number,
+  grupos: Array<{ grupoId: string; nome: string }>,
+): EmpateDoBimestre {
+  return {
+    bimestreId,
+    valor,
+    grupos: grupos.map((grupo) => ({ ...grupo, valor })),
+  }
+}
+
+/**
+ * Encerramento aceito, e a situação do bimestre virando ENCERRADO para o
+ * `GET /competicoes/:id` seguinte.
+ *
+ * A virada acontece dentro do handler, e não no teste, pelo mesmo motivo de
+ * `lancamentosDoComponente`: é o que deixa a página recarregar sozinha e mostrar
+ * a etiqueta "Encerrado" e as abas de montagem travadas, sem o teste precisar
+ * reescrever a resposta da competição entre um `act` e outro.
+ */
+export function encerramentoAceito(
+  resultado: ResultadoDoEncerramento,
+  bimestres: Bimestre[],
+) {
+  return http.post(`${API}/bimestres/:id/encerrar`, ({ params }) => {
+    const bimestreId = String(params.id)
+
+    const alvo = bimestres.find((item) => item.id === bimestreId)
+    if (alvo) alvo.situacao = SITUACAO_BIMESTRE.ENCERRADO
+
+    return HttpResponse.json({ ...resultado, bimestreId })
+  })
+}
+
+/**
+ * Encerramento recusado por pesos abertos, com a lista de matérias no corpo do
+ * 400 — a mesma que `POST .../validar` devolve.
+ */
+export function encerramentoRecusadoPorPesos(materiasPendentes: MateriaPendente[]) {
+  return http.post(`${API}/bimestres/:id/encerrar`, () =>
+    HttpResponse.json(
+      {
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Todas as matérias precisam somar 100% dos pesos para encerrar o bimestre.',
+        materiasPendentes,
+      },
+      { status: 400 },
+    ),
+  )
+}
+
+/**
+ * Encerramento recusado por motivo que não tem lista de matérias.
+ *
+ * Serve para o erro que não é de pesos — bimestre já encerrado em outra aba, API
+ * fora do ar, erro do servidor —, em que a tela mostra a mensagem e oferece tentar
+ * de novo, em vez de mandar para a aba de componentes.
+ */
+export function encerramentoRecusado(mensagem: string, status = 409) {
+  return http.post(`${API}/bimestres/:id/encerrar`, () =>
+    HttpResponse.json({ statusCode: status, message: mensagem, error: 'Conflict' }, { status }),
+  )
 }
 

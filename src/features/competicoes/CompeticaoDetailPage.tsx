@@ -14,15 +14,20 @@ import { formatarData, rotuloDoBimestre } from './bimestres'
 import { useCompeticao, useContextoDaCompeticao, useGrupos } from './competicoes.hooks'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
+import { AlertaDeEmpates } from './AlertaDeEmpates'
+import { AvisoDeConclusao } from './AvisoDeConclusao'
 import { ComponentesDePontuacao } from './ComponentesDePontuacao'
+import { EncerrarBimestre } from './EncerrarBimestre'
 import { GerenciarMembros } from './GerenciarMembros'
 import { LancamentosDeComponente } from './LancamentosDeComponente'
 import { PreviaDaSintese } from './PreviaDaSintese'
+import { SintesesOficiais } from './SintesesOficiais'
 import { modeloAvaliacaoDaEscola } from './modelo-avaliacao'
 import { NovoGrupoForm } from './NovoGrupoForm'
 import { SelecaoDeBimestre } from './SelecaoDeBimestre'
 import { rotaDasCompeticoes } from '../salas/rotas'
 import { useAlunos } from '../salas/salas.hooks'
+import type { ResultadoDoEncerramento } from './encerramento.tipos'
 
 const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
 const ABA_ATIVA = 'bg-primary-50 text-primary-700'
@@ -40,6 +45,8 @@ type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa'
  *
  * "Prévia" entrou na Etapa 06 entre Lançamentos e Rankings, que é a ordem em que
  * o professor trabalha: lança, confere como a turma está, e só depois encerra.
+ * Na Etapa 07 a mesma aba ganha o outro nome depois do encerramento: com a síntese
+ * gravada, o que está na tela deixou de ser prévia (ver `rotuloDaAba`).
  */
 const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
   { id: 'grupos', rotulo: 'Grupos' },
@@ -73,6 +80,21 @@ export function CompeticaoDetailPage() {
   const [aba, setAba] = useState<AbaDaCompeticao>('grupos')
   const [componenteEscolhido, setComponenteEscolhido] = useState<string>()
 
+  /*
+   * Resultado do encerramento de cada bimestre, por id.
+   *
+   * Fica na página — e não dentro do `EncerrarBimestre` — porque o encerramento
+   * não acaba na chamada: o bimestre passa a ENCERRADO (o que só o `GET
+   * /competicoes/:id` com a situação nova sabe dizer), a prévia dá lugar às
+   * sínteses gravadas e o empate vira banner. Tudo isso é estado da página, e o
+   * botão só entrega o que a API devolveu.
+   *
+   * Por bimestre, e não um resultado só: o professor pode encerrar o 1º, abrir o
+   * 2º e voltar para conferir o 1º — o painel oficial de cada um continua o que
+   * a API gravou nele.
+   */
+  const [encerramentos, setEncerramentos] = useState<Record<string, ResultadoDoEncerramento>>({})
+
   const bimestres = competicao.dados?.bimestres ?? []
 
   /*
@@ -100,6 +122,28 @@ export function CompeticaoDetailPage() {
   const listaDeGrupos = grupos.dados?.grupos ?? []
 
   /*
+   * O que a API gravou no bimestre em exibição, se foi encerrado nesta sessão.
+   *
+   * Só existe para o bimestre que o professor acabou de encerrar: as sínteses
+   * oficiais gravadas antes disso só são legíveis pelos endpoints de ranking e
+   * relatório, que é o que a Etapa 08 vai trazer. Sem o resultado em mãos, a aba
+   * continua mostrando a prévia — que recusa calcular para bimestre encerrado, com
+   * o aviso de que quem manda no número agora é a API.
+   */
+  const resultadoDoBimestre = bimestreAtual ? encerramentos[bimestreAtual.id] : undefined
+
+  /*
+   * A faixa de avisos do encerramento só existe quando há algo a dizer — empate
+   * detectado ou competição concluída. Um container vazio empurraria a barra de
+   * abas para baixo sem motivo, e é este mesmo espaço que a Etapa 09 vai reusar
+   * para a pendência de desempate.
+   */
+  const empatesDoBimestre = resultadoDoBimestre?.empates ?? []
+  const mostrarAvisos =
+    resultadoDoBimestre !== undefined &&
+    (empatesDoBimestre.length > 0 || resultadoDoBimestre.competicaoConcluida)
+
+  /*
    * Trocar de bimestre descarta o componente escolhido: o mesmo componente em outro
    * bimestre é outro componente, e manter a seleção mostraria uma lista de notas
    * que não é a do bimestre que o professor acabou de abrir.
@@ -111,6 +155,31 @@ export function CompeticaoDetailPage() {
 
   function aoMudarGrupos() {
     grupos.recarregar()
+  }
+
+  /**
+   * O que a página faz depois de um encerramento aceito.
+   *
+   * Quatro efeitos, na ordem em que importam:
+   *
+   * 1. Guarda o resultado, que é a síntese oficial e a lista de empates.
+   * 2. Fixa o bimestre encerrado como o selecionado. Sem isso, a escolha padrão
+   *    ("o aberto mais recente") mudaria de alvo no instante em que a situação
+   *    nova chegasse, e a tela saltaria para outro bimestre logo depois de o
+   *    professor ter acabado de agir nele.
+   * 3. Vai para a aba da síntese: a pergunta seguinte de quem encerra é "qual
+   *    nota ficou?", e a resposta é o painel que acabou de aparecer.
+   * 4. Recarrega a competição, para a situação ENCERRADO chegar do servidor — a
+   *    etiqueta do bimestre e o bloqueio das abas de montagem dependem disso, e
+   *    localmente o `bimestre` ainda diz ABERTO.
+   */
+  function aoEncerrar(resultado: ResultadoDoEncerramento) {
+    setEncerramentos((atuais) => ({ ...atuais, [resultado.bimestreId]: resultado }))
+    setBimestreEscolhido(resultado.bimestreId)
+    setComponenteEscolhido(undefined)
+    setAba('previa')
+    toast.success(`${rotuloDoBimestre(resultado.numero)} encerrado. Síntese gravada pela API.`)
+    competicao.recarregar()
   }
 
   if (competicao.carregando) {
@@ -160,6 +229,19 @@ export function CompeticaoDetailPage() {
         }
       />
 
+      {/*
+       * Os avisos do encerramento ficam acima das abas, não dentro de uma delas:
+       * empate e fim de competição não pertencem ao painel da síntese, e um
+       * professor na aba de Lançamentos também precisa saber que o bimestre em
+       * questão fechou com duas equipes empatadas.
+       */}
+      {resultadoDoBimestre && mostrarAvisos ? (
+        <div className="mt-6 space-y-4">
+          <AlertaDeEmpates empates={empatesDoBimestre} numeroDoBimestre={resultadoDoBimestre.numero} />
+          <AvisoDeConclusao competicaoConcluida={resultadoDoBimestre.competicaoConcluida} />
+        </div>
+      ) : null}
+
       <nav
         role="tablist"
         aria-label="Seções da competição"
@@ -175,7 +257,7 @@ export function CompeticaoDetailPage() {
             onClick={() => setAba(item.id)}
             className={`${ABA} ${item.id === aba ? ABA_ATIVA : 'text-neutral-600 hover:text-primary-700'}`}
           >
-            {item.rotulo}
+            {rotuloDaAba(item, resultadoDoBimestre)}
           </button>
         ))}
 
@@ -204,11 +286,28 @@ export function CompeticaoDetailPage() {
           </ul>
         </Card>
 
-        <SelecaoDeBimestre
-          bimestres={bimestres}
-          valor={bimestreId}
-          onChange={trocarBimestre}
-        />
+        {/*
+         * O encerramento fica na mesma linha do seletor, e não numa aba: é a ação
+         * que fecha o bimestre selecionado, e depende dele. Num campo separado, o
+         * professor teria de conferir duas vezes se está encerrando o bimestre
+         * certo — o botão se refere a "o bimestre em exibição", então a pergunta
+         * tem uma resposta só, do lado do controle que a define.
+         */}
+        <div className="flex flex-wrap items-end gap-3">
+          <SelecaoDeBimestre
+            bimestres={bimestres}
+            valor={bimestreId}
+            onChange={trocarBimestre}
+          />
+
+          {bimestreAtual ? (
+            <EncerrarBimestre
+              bimestre={bimestreAtual}
+              onEncerrado={aoEncerrar}
+              onIrParaComponentes={() => setAba('componentes')}
+            />
+          ) : null}
+        </div>
 
         <div role="tabpanel" aria-labelledby={`aba-${aba}`}>
           {aba === 'grupos' ? (
@@ -325,8 +424,17 @@ export function CompeticaoDetailPage() {
            * cuida do próprio estado de carga e dos casos vazios: bimestre sem
            * componente, sala sem aluno e bimestre já encerrado. A página só
            * escolhe a linha de "carregando aluno" que a lista da sala já tem.
+           *
+           * Encerrado com o resultado do encerramento em mãos, quem aparece é a
+           * síntese que a API gravou: mesma aba, outra garantia. Sem o resultado —
+           * bimestre encerrado em outra sessão — a prévia segue no lugar, e é ela
+           * que avisa que quem manda no número agora é a API.
            */}
-          {aba === 'previa' && bimestreAtual && !alunos.carregando ? (
+          {aba === 'previa' && bimestreAtual && resultadoDoBimestre ? (
+            <SintesesOficiais resultado={resultadoDoBimestre} />
+          ) : null}
+
+          {aba === 'previa' && bimestreAtual && !resultadoDoBimestre && !alunos.carregando ? (
             <PreviaDaSintese
               bimestre={bimestreAtual}
               alunos={alunos.dados ?? []}
@@ -338,6 +446,23 @@ export function CompeticaoDetailPage() {
       </div>
     </>
   )
+}
+
+/**
+ * Rótulo da aba, que muda depois do encerramento.
+ *
+ * "Prévia" nomeia uma promessa — a de que o número ainda pode mudar. Com a
+ * síntese gravada, a mesma aba passa a mostrar outra coisa, e o nome antigo
+ * continuaria errado: o professor que lê "Prévia" acima de um valor congelado lê
+ * a palavra errada, e é justamente a palavra que diria se aquilo ainda podia ser
+ * mexido.
+ */
+function rotuloDaAba(
+  aba: { id: AbaDaCompeticao; rotulo: string },
+  resultado: ResultadoDoEncerramento | undefined,
+): string {
+  if (aba.id === 'previa' && resultado) return 'Síntese'
+  return aba.rotulo
 }
 
 function BlocoDeBimestre({ bimestre }: { bimestre: Bimestre }) {

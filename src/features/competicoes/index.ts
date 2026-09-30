@@ -1,7 +1,13 @@
+export { AlertaDeEmpates } from './AlertaDeEmpates'
+export type { AlertaDeEmpatesProps } from './AlertaDeEmpates'
+export { AvisoDeConclusao } from './AvisoDeConclusao'
+export type { AvisoDeConclusaoProps } from './AvisoDeConclusao'
 export { CompeticaoDetailPage } from './CompeticaoDetailPage'
 export { CompeticoesDaSala } from './CompeticoesDaSala'
 export { ComponentesDePontuacao } from './ComponentesDePontuacao'
 export type { ComponentesDePontuacaoProps } from './ComponentesDePontuacao'
+export { EncerrarBimestre } from './EncerrarBimestre'
+export type { EncerrarBimestreProps } from './EncerrarBimestre'
 export { GerenciarMembros } from './GerenciarMembros'
 export type { GerenciarMembrosProps } from './GerenciarMembros'
 export { LancamentosDeComponente } from './LancamentosDeComponente'
@@ -17,6 +23,8 @@ export type { PreviaDaSinteseProps } from './PreviaDaSintese'
 export { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
 export { SelecaoDeBimestre } from './SelecaoDeBimestre'
 export type { SelecaoDeBimestreProps } from './SelecaoDeBimestre'
+export { SintesesOficiais } from './SintesesOficiais'
+export type { SintesesOficiaisProps } from './SintesesOficiais'
 export { AVISO_DE_PREVIA, TabelaDeLancamentos } from './TabelaDeLancamentos'
 export type { TabelaDeLancamentosProps } from './TabelaDeLancamentos'
 export {
@@ -96,3 +104,14 @@ export type {
   NovoComponentePontuacao,
   ValidacaoDePesosDaApi,
 } from './componentes-pontuacao.tipos'
+export { encerrarBimestre, recusaDoEncerramento } from './encerramento.api'
+export type {
+  EmpateDoBimestre,
+  GrupoEmpatado,
+  PontuacaoFinal,
+  RecusaDoEncerramento,
+  ResultadoDoEncerramento,
+  SinteseOficialDoAluno,
+  SinteseOficialDoGrupo,
+  TotaisDoEncerramento,
+} from './encerramento.tipos'
