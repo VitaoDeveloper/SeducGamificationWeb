@@ -53,7 +53,7 @@ tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
 | `/salas/:salaId`        | professor — sala, lecionamentos e inscrição |
 | `/salas/:salaId/alunos` | professor — alunos da sala e cadastro |
 | `/salas/:salaId/competicoes` | professor — competições de cada lecionamento da sala |
-| `/competicoes/:competicaoId` | professor — bimestres, grupos e composição por bimestre |
+| `/competicoes/:competicaoId` | professor — bimestres, grupos, componentes de pontuação e lançamentos por bimestre |
 | `/conta/senha`          | qualquer um autenticado             |
 | `/em-breve`             | aluno — área em construção até a Etapa 08 |
 
@@ -137,8 +137,63 @@ Decisões que valem conhecer:
   (`features/competicoes/bimestres.ts`) é pura e devolve o erro por bimestre e o
   erro de conjunto (sobreposição/ordem); o formulário só a liga aos campos.
 - **A sala do detalhe é deduzida do lecionamento.** Não há `GET /lecionamentos/:id`
-  nem `GET /salas/:id`, então `useSalaDoLecionamento` procura o lecionamento nas
-  salas do professor para achar a lista de alunos.
+  nem `GET /salas/:id`, então `useContextoDaCompeticao` procura o lecionamento nas
+  salas do professor para achar a sala e a lista de alunos numa varredura só.
+
+## Componentes de pontuação e lançamentos (Etapa 05)
+
+O detalhe da competição virou abas: **Grupos** (Etapa 04), **Componentes** e
+**Lançamentos**, com **Rankings** visível e desabilitada até a Etapa 06. As três
+penduram a mesma escolha de bimestre, e o seletor continua acima das abas.
+
+**Componentes** mostra um cartão por matéria com os pesos e o indicador de
+fechamento — `100% ✓` ou `faltam X%`. A soma é refeita no front e arredondada a 2
+casas em `avaliarPesos`, e não lida de `somaPesoPercentual`: `33.33 + 33.33 +
+33.34` dá `100.00000000000001` em ponto flutuante, e sem o arredondamento uma
+matéria perfeitamente fechada apareceria como "faltam 0%". O veredito do topo é o
+de `POST .../validar`, o mesmo que a Etapa 07 vai consultar para recusar o
+encerramento de um bimestre com pesos abertos.
+
+**Lançamentos** traz uma linha por aluno da sala, com o campo no formato do modelo
+de avaliação da escola: input numérico 1–10 com passo `0.01`, ou seletor de
+rótulos. Salvar em lote é o caminho principal, e cada linha que mudou ganha o seu
+próprio botão para o professor retocar um nome só.
+
+Decisões que valem conhecer:
+
+- **O que está no campo vem do servidor; o que foi digitado fica por cima.** O
+  valor efetivo é `editados[alunoId] ?? valor já salvo`, então uma recarga por baixo
+  não apaga o que está sendo digitado. E a tabela recebe `key={componente.id}`:
+  sem a remontagem, a nota digitada na prova de Matemática reapareceria como se
+  fosse da dissertação de Português.
+- **Aluno sem nota não trava o salvamento dos outros.** Campo em branco não entra
+  no lote, e a API trata a ausência como 0 no cálculo. É por isso que "nenhum
+  lançamento" e "campo vazio" são a mesma coisa.
+- **O bimestre encerrado trava as notas, não a leitura.** Os campos e os salvamentos
+  ficam desabilitados, mas o seletor de componente continua livre: consultar um
+  bimestre encerrado é justamente o que se faz com ele. Na aba de componentes, o
+  formulário de criação some inteiro em vez de ficar um botão morto.
+- **Um erro de regra de negócio da API aparece como está.** A soma dos pesos de uma
+  matéria que passa de 100% só é detectável no servidor, que soma o que já existe
+  no banco; o front valida o formato do peso, não o total da matéria.
+
+### Limites da API que moldam a tela
+
+- **A API não expõe `modeloAvaliacao` da escola.** Não existe rota de modelos de
+  avaliação, e `GET /salas` devolve `escola: { id, nome }` por um `select`
+  explícito que não inclui o campo. `modeloAvaliacaoDaEscola`
+  (`features/competicoes/modelo-avaliacao.ts`) é a costura: devolve o CPS ETEC
+  (`I`, `R`, `B`, `MB`) do seed da API e, quando existir a rota, muda só o corpo
+  dela. Os componentes recebem o modelo por prop, então nada mais muda junto.
+  O `LancamentosService` já valida o modelo por dentro e recusa com 400 valor fora
+  da escala, e esse erro é exibido como a API mandou.
+- **O `GET` de componentes é agrupado por matéria.** Não existe rota de componente
+  solto nem listagem por componente: a tela agrupa o que a API já devolve grouped,
+  e os lançamentos vêm por componente (`GET
+  /componentes-pontuacao/:id/lancamentos`), com `aluno` embutido no lançamento.
+- **O lançamento não tem `id`.** A chave é o par `(componentePontuacaoId, alunoId)`
+  e a API faz `upsert`, então relançar a nota troca a existente em vez de duplicar
+  linha na tela.
 
 ## Testes
 
@@ -160,7 +215,7 @@ desligar o mock do anterior.
 | ------------------------------ | --------------------------------------------------- |
 | `src/test/setup.ts`            | jest-dom, servidor msw no ar e limpeza de sessão     |
 | `src/test/server.ts`           | o `setupServer` do msw, sem handlers                 |
-| `src/test/handlers.ts`         | fábricas de handler de autenticação e de sala, por cenário |
+| `src/test/handlers.ts`         | fábricas de handler por cenário, de autenticação a lançamentos |
 | `src/test/render.tsx`          | renderiza com `ToastProvider`, `AuthProvider` e `MemoryRouter` |
 
 Dois pontos que valem saber antes de escrever o próximo teste:
@@ -204,7 +259,7 @@ src/
   features/    uma pasta por domínio
     auth/      telas de login e troca de senha, contexto de sessão, rotas
     salas/     listagem, detalhe, inscrição e alunos — a Etapa 03
-    competicoes/ competição, bimestres, grupos e composição — a Etapa 04
+    competicoes/ competição, bimestres, grupos, componentes e lançamentos — as Etapas 04 e 05
   lib/         cliente HTTP, guarda da sessão, utilitários
   styles/      tokens de design e estilos globais
   test/        base dos testes: msw, setup e utilitários de render
@@ -219,3 +274,9 @@ A Etapa 04 reusa a mesma base: as abas da sala saíram de `SalaDetailPage` para
 `AbasDaSala` (as três telas da sala agora compartilham a barra), o `Badge`
 estreou no estado Aberto/Encerrado do bimestre, e o toast passou a confirmar
 criação de competição e de grupo.
+
+A Etapa 05 acrescenta as abas da competição sobre essa mesma barra
+(`role="tablist"`, com a aba de rankings já no lugar e desabilitada), e o `Table`
+vira a grade de lançamento das notas, com input numérico ou `Select` de conceitos
+conforme o modelo da escola. O `Badge` ganhou o indicador de fechamento da
+matéria.

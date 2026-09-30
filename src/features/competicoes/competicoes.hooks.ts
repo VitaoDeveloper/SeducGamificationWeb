@@ -82,16 +82,28 @@ export function useCompeticoesDaSala(salaId: string | undefined) {
   )
 }
 
+/** Sala e lecionamento de uma competição, procurados juntos nas salas do professor. */
+export interface ContextoDaCompeticao {
+  sala: Sala
+  lecionamento: Lecionamento
+}
+
 /**
- * A sala a que um lecionamento pertence.
+ * A sala e o lecionamento a que a competição pertence.
  *
- * O detalhe da competição conhece só o `lecionamentoId`, mas a lista de alunos
- * (para compor os grupos) é por sala. Não há `GET /lecionamentos/:id` nem
- * `GET /salas/:id`, então a sala é procurada nas salas do professor: são poucas,
- * e o lecionamento é comparado dentro de cada uma.
+ * O detalhe da competição conhece só o `lecionamentoId`, mas a tela precisa de
+ * duas coisas que pendem dele: a lista de alunos, que é por sala (composição dos
+ * grupos e lançamentos de nota), e os componentes curriculares, que são do
+ * lecionamento (o seletor de matéria do formulário de pontuação, Etapa 05). Não
+ * há `GET /lecionamentos/:id` nem `GET /salas/:id`, então os dois são procurados
+ * nas salas do professor: são poucas, e o lecionamento é comparado dentro de cada
+ * uma.
+ *
+ * Vieram juntos porque a busca é a mesma: pedir os dois separadamente faria o
+ * professor pagar duas varreduras das mesmas salas para a tela renderizar.
  */
-export function useSalaDoLecionamento(lecionamentoId: string | undefined) {
-  return useRequisicao<Sala | null>(
+export function useContextoDaCompeticao(lecionamentoId: string | undefined) {
+  return useRequisicao<ContextoDaCompeticao | null>(
     async () => {
       if (!lecionamentoId) return null
 
@@ -99,14 +111,13 @@ export function useSalaDoLecionamento(lecionamentoId: string | undefined) {
 
       for (const sala of salas) {
         const lecionamentos = await listarLecionamentos(sala.id).catch(() => [] as Lecionamento[])
-        if (lecionamentos.some((lecionamento) => lecionamento.id === lecionamentoId)) {
-          return sala
-        }
+        const lecionamento = lecionamentos.find((item) => item.id === lecionamentoId)
+        if (lecionamento) return { sala, lecionamento }
       }
 
       return null
     },
-    `sala-do-lecionamento:${lecionamentoId ?? ''}`,
+    `contexto-da-competicao:${lecionamentoId ?? ''}`,
     { erroPadrao: 'Não foi possível carregar a sala da competição.' },
   )
 }

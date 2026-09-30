@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { Route, Routes } from 'react-router-dom'
@@ -13,11 +13,15 @@ import {
   aluno,
   bimestre,
   competicao,
+  componentesDoBimestre as componentesDoBimestreResposta,
   grupo,
   lecionamento,
+  listagemDeLancamentos,
+  materiaFechada,
   membro,
   sala,
   salasDoProfessor,
+  validacaoDePesos,
 } from '../../test/handlers'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import { CompeticaoDetailPage } from './CompeticaoDetailPage'
@@ -44,6 +48,9 @@ const COMPETICAO = competicao({
   nome: 'Copa do Conhecimento',
   lecionamentoId: LECIONAMENTO.id,
 })
+
+/** Uma matéria fechada em 100%, para as abas de componentes e lançamentos. */
+const MATEMATICA_FECHADA = materiaFechada('mat-1', 'Matemática', ['Prova bimestral', 100])
 
 function abrirSessao() {
   gravarSessao({
@@ -158,4 +165,82 @@ describe('CompeticaoDetailPage', () => {
     expect(await screen.findByText('Competição não encontrada.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /voltar para as salas/i })).toBeInTheDocument()
   })
+
+  it('navega entre as abas e mantém a de grupos como ponto de partida', async () => {
+    const pessoa = userEvent.setup()
+    server.use(...cenario(), ...componentesDoBimestre())
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+
+    // A tela abre nos grupos, que é de onde a Etapa 04 parou.
+    expect(screen.getByRole('tab', { name: 'Grupos' })).toHaveAttribute('aria-selected', 'true')
+
+    await pessoa.click(screen.getByRole('tab', { name: 'Componentes' }))
+
+    expect(screen.getByRole('tab', { name: 'Componentes' })).toHaveAttribute('aria-selected', 'true')
+    // A aba de grupos sai da tela junto: nada de manter os componentes atrás de
+    // um painel que não está mais visível.
+    expect(screen.queryByText('Novo grupo')).not.toBeInTheDocument()
+    expect(await screen.findByText('Prova bimestral')).toBeInTheDocument()
+
+    await pessoa.click(screen.getByRole('tab', { name: 'Lançamentos' }))
+
+    expect(screen.queryByText('Prova bimestral')).not.toBeInTheDocument()
+    expect(await screen.findByLabelText('Componente de pontuação')).toBeInTheDocument()
+  })
+
+  it('deixa a aba de rankings visível e desabilitada, sem virar um botão', async () => {
+    server.use(...cenario())
+    abrirSessao()
+
+    renderizarDetalhe()
+    await screen.findAllByText('Alpha')
+
+    const rankings = screen.getByTitle('Chega na Etapa 06')
+    expect(rankings).toHaveTextContent('Rankings')
+    expect(rankings).toHaveAttribute('aria-disabled', 'true')
+    // Não é um `button`, então nem dá para focar por teclado e clicar por engano.
+    expect(rankings.tagName).toBe('SPAN')
+  })
+
+  it('descarta o componente escolhido ao trocar de bimestre', async () => {
+    const pessoa = userEvent.setup()
+    server.use(...cenario(), ...componentesDoBimestre())
+    abrirSessao()
+
+    renderizarDetalhe()
+    await screen.findAllByText('Alpha')
+
+    await pessoa.click(screen.getByRole('tab', { name: 'Lançamentos' }))
+    await pessoa.selectOptions(await screen.findByLabelText('Componente de pontuação'), 'mat-1-cp1')
+
+    // A escola do cenário não tem modelo exposto pela API, então a tela assume o
+    // CPS ETEC e o campo de nota aparece como seletor de conceitos.
+    expect((await screen.findAllByLabelText('Conceito de Ana')).length).toBeGreaterThan(0)
+
+    // Leva para o b2, que está encerrado e não tem componente: a escolha do b1
+    // não pode sobrar, senão a tela mostraria as notas de uma prova do outro bimestre.
+    await pessoa.selectOptions(screen.getByLabelText('Bimestre'), 'b2')
+
+    await waitFor(() => expect(screen.getByLabelText('Componente de pontuação')).toHaveValue(''))
+    expect(screen.queryAllByLabelText('Conceito de Ana')).toHaveLength(0)
+  })
 })
+
+/** Os dois endpoints de componentes que as abas novas consomem. */
+function componentesDoBimestre() {
+  return [
+    http.get(`${API}/bimestres/:id/componentes-pontuacao`, ({ params }) =>
+      HttpResponse.json(
+        componentesDoBimestreResposta(String(params.id), [MATEMATICA_FECHADA]),
+      ),
+    ),
+    http.post(`${API}/bimestres/:id/componentes-pontuacao/validar`, () =>
+      HttpResponse.json(validacaoDePesos([MATEMATICA_FECHADA])),
+    ),
+    ...listagemDeLancamentos([]),
+  ]
+}

@@ -9,6 +9,15 @@ import type {
   GrupoCompetidor,
   MembroDoGrupo,
 } from '../features/competicoes/competicoes.tipos'
+import type {
+  ComponentePontuacaoDoBimestre,
+  ComponentesDoBimestre,
+  Lancamento,
+  LancarNota,
+  LoteDeLancamentos,
+  MateriaComPesos,
+  ValidacaoDePesosDaApi,
+} from '../features/competicoes/componentes-pontuacao.tipos'
 
 /**
  * Handlers de autenticação para os testes, em forma de fábrica.
@@ -240,5 +249,194 @@ export function membro(grupoId: string, aluno: Aluno, bimestreId: string): Membr
     bimestreId,
     aluno: { id: aluno.id, nome: aluno.nome, codigoMatricula: aluno.codigoMatricula },
   }
+}
+
+/* ------------------------------------------------- componentes e lançamentos -- */
+
+export function componentePontuacao(
+  parcial: Partial<ComponentePontuacaoDoBimestre> &
+    Pick<ComponentePontuacaoDoBimestre, 'id' | 'nome' | 'pesoPercentual'>,
+): ComponentePontuacaoDoBimestre {
+  return {
+    componenteCurricularId: 'mat-1',
+    createdAt: CRIADO_EM,
+    ...parcial,
+  }
+}
+
+/**
+ * Uma matéria com os componentes que ela tem no bimestre.
+ *
+ * A `somaPesoPercentual` é calculada aqui, e não passada, pelo mesmo motivo da
+ * resposta real: a API soma em `Decimal` no banco justamente para não acumular
+ * erro de ponto flutuante, e um fixture que aceitasse a soma pronta deixaria
+ * passar um total que a API nunca devolveria.
+ */
+export function materia(
+  parcial: Partial<MateriaComPesos> & Pick<MateriaComPesos, 'componenteCurricularId' | 'materiaNome'>,
+  componentes: ComponentePontuacaoDoBimestre[] = [],
+): MateriaComPesos {
+  const soma = componentes.reduce((total, componente) => total + componente.pesoPercentual, 0)
+
+  return {
+    somaPesoPercentual: Math.round(soma * 100) / 100,
+    componentesPontuacao: componentes,
+    ...parcial,
+  }
+}
+
+/** Uma matéria com os pesos já fechados em 100%. */
+export function materiaFechada(
+  componenteCurricularId: string,
+  materiaNome: string,
+  ...componentes: Array<[nome: string, pesoPercentual: number]>
+): MateriaComPesos {
+  return materia(
+    { componenteCurricularId, materiaNome },
+    componentes.map(([nome, pesoPercentual], indice) =>
+      componentePontuacao({
+        id: `${componenteCurricularId}-cp${indice + 1}`,
+        nome,
+        pesoPercentual,
+        componenteCurricularId,
+      }),
+    ),
+  )
+}
+
+/**
+ * Resposta de `GET /bimestres/:id/componentes-pontuacao`, com `todasFechadas`
+ * coerente com as matérias passadas.
+ */
+export function componentesDoBimestre(
+  bimestreId: string,
+  materias: MateriaComPesos[],
+): ComponentesDoBimestre {
+  return {
+    bimestreId,
+    materias,
+    todasFechadas: materias.every((item) => item.somaPesoPercentual === 100),
+  }
+}
+
+/** Resposta de `POST .../validar`: as matérias que não fecham, com quanto falta. */
+export function validacaoDePesos(materias: MateriaComPesos[]): ValidacaoDePesosDaApi {
+  const materiasPendentes = materias
+    .filter((item) => item.somaPesoPercentual !== 100)
+    .map((item) => ({
+      componenteCurricularId: item.componenteCurricularId,
+      materiaNome: item.materiaNome,
+      somaPesoPercentual: item.somaPesoPercentual,
+      faltaParaFechar: Math.round((100 - item.somaPesoPercentual) * 100) / 100,
+    }))
+
+  return { fechado: materiasPendentes.length === 0, materiasPendentes }
+}
+
+/** Nota lançada, com o aluno embutido como `GET .../lancamentos` devolve. */
+export function lancamento(
+  componentePontuacaoId: string,
+  aluno: Aluno,
+  valorNoModelo: string,
+): Lancamento {
+  return {
+    componentePontuacaoId,
+    alunoId: aluno.id,
+    valorNoModelo,
+    aluno: { id: aluno.id, nome: aluno.nome, codigoMatricula: aluno.codigoMatricula },
+    createdAt: CRIADO_EM,
+    updatedAt: CRIADO_EM,
+  }
+}
+
+/**
+ * Grava uma nota na lista do cenário, no lugar de uma anterior do mesmo aluno.
+ *
+ * A API faz `upsert` no par `(componentePontuacaoId, alunoId)`, então relançar
+ * uma nota tem de trocar a existente — e é essa troca que faz o teste ver a
+ * linha trocar de valor em vez de duplicar na tela.
+ */
+function registrarNota(
+  notas: Lancamento[],
+  componentePontuacaoId: string,
+  lancada: LancarNota,
+  alunos: Aluno[],
+): Lancamento {
+  const aluno = alunos.find((candidato) => candidato.id === lancada.alunoId)
+
+  const registro: Lancamento = {
+    componentePontuacaoId,
+    alunoId: lancada.alunoId,
+    valorNoModelo: lancada.valorNoModelo,
+    aluno: {
+      id: lancada.alunoId,
+      nome: aluno?.nome ?? 'Aluno',
+      codigoMatricula: aluno?.codigoMatricula ?? '',
+    },
+    createdAt: CRIADO_EM,
+    updatedAt: CRIADO_EM,
+  }
+
+  const existente = notas.findIndex(
+    (nota) => nota.alunoId === lancada.alunoId && nota.componentePontuacaoId === componentePontuacaoId,
+  )
+
+  if (existente >= 0) notas[existente] = registro
+  else notas.push(registro)
+
+  return registro
+}
+
+/**
+ * Só a listagem de lançamentos, para o teste que precisa do `POST` por conta
+ * própria — capturar o payload, ou recusar a requisição com um erro.
+ *
+ * Existe separada porque dois handlers do mesmo `server.use` disputam a mesma
+ * rota e quem responde é o último registrado: misturar o `POST` do cenário com o
+ * `POST` de teste depende dessa ordem implícita. Aqui o teste monta a resposta
+ * que quer e não precisa saber de precedência.
+ *
+ * A lista filtra por componente para que a mesma lista sirva a mais de um
+ * componente do cenário.
+ */
+export function listagemDeLancamentos(notas: Lancamento[]) {
+  return [
+    http.get(`${API}/componentes-pontuacao/:id/lancamentos`, ({ params }) =>
+      HttpResponse.json(notas.filter((nota) => nota.componentePontuacaoId === String(params.id))),
+    ),
+  ]
+}
+
+/**
+ * Os três handlers de lançamento de um componente, sobre a mesma lista de notas:
+ * a listagem, o salvamento de uma linha e o lote.
+ *
+ * A mutação acontece dentro do handler, e não no teste, de propósito: é o que
+ * permite o teste ver a tabela atualizar depois de salvar, sem ter que reescrever
+ * a resposta da listagem entre um `act` e outro.
+ *
+ * Os `alunos` entram para o lançamento poder devolver o nome de quem recebeu a
+ * nota — é o `lancamentos[].aluno` que a API embute e que a tela usa na coluna.
+ */
+export function lancamentosDoComponente(notas: Lancamento[], alunos: Aluno[] = []) {
+  return [
+    ...listagemDeLancamentos(notas),
+    http.post(`${API}/componentes-pontuacao/:id/lancamentos`, async ({ params, request }) => {
+      const lancada = (await request.json()) as LancarNota
+
+      return HttpResponse.json(registrarNota(notas, String(params.id), lancada, alunos), {
+        status: 201,
+      })
+    }),
+    http.post(`${API}/componentes-pontuacao/:id/lancamentos/lote`, async ({ params, request }) => {
+      const { lancamentos } = (await request.json()) as LoteDeLancamentos
+
+      const salvos = lancamentos.map((lancada) =>
+        registrarNota(notas, String(params.id), lancada, alunos),
+      )
+
+      return HttpResponse.json(salvos, { status: 201 })
+    }),
+  ]
 }
 
