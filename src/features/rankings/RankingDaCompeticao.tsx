@@ -46,6 +46,21 @@ export interface RankingDaCompeticaoProps {
   alunoId?: string
   /** Rótulo da marca "você" no ranking individual. */
   rotuloDeVoce?: string
+  /**
+   * Contador de revalidação, incrementado pela página quando um desempate é
+   * gravado.
+   *
+   * O ranking é o único lugar da tela onde a ordem definida pelo desempate
+   * aparece: `GET .../ranking` troca a posição do grupo desempatado, e não
+   * recalcula nada no front. Por isso o desempate resolvido precisa chegar até
+   * aqui como uma busca nova — e como busca, não como remonte, para que a visão
+   * que o professor escolheu (e o bimestre do parcial) continuem onde estavam
+   * enquanto a tabela troca as posições.
+   *
+   * Só a visão em exibição busca: as outras continuam sem requisição, que é o
+   * que as hooks abaixo já garantem.
+   */
+  revalidacao?: number
 }
 
 /**
@@ -75,6 +90,7 @@ export function RankingDaCompeticao({
   visaoInicial = TIPO_RANKING.PARCIAL,
   alunoId,
   rotuloDeVoce,
+  revalidacao = 0,
 }: RankingDaCompeticaoProps) {
   const [visao, setVisao] = useState<Visao>(visaoInicial)
   const [bimestreEscolhido, setBimestreEscolhido] = useState(bimestreInicial)
@@ -95,13 +111,16 @@ export function RankingDaCompeticao({
   const parcial = useRankingDeGrupos(
     visao === TIPO_RANKING.PARCIAL && bimestreId ? competicaoId : undefined,
     bimestreId,
+    revalidacao,
   )
   const anual = useRankingDeGrupos(
     visao === TIPO_RANKING.ANUAL ? competicaoId : undefined,
     undefined,
+    revalidacao,
   )
   const individual = useRankingIndividual(
     visao === TIPO_RANKING.INDIVIDUAL ? competicaoId : undefined,
+    revalidacao,
   )
 
   return (

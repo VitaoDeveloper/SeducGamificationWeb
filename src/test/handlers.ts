@@ -25,6 +25,12 @@ import type {
   SinteseOficialDoAluno,
   SinteseOficialDoGrupo,
 } from '../features/competicoes/encerramento.tipos'
+import { ORIGEM_DESEMPATE, TIPO_EMPATE } from '../features/competicoes/desempate.tipos'
+import type {
+  CorpoDoDesempate,
+  PendenciaDeDesempate,
+  RespostaDoDesempateAutomatico,
+} from '../features/competicoes/desempate.tipos'
 import { TIPO_RANKING, TOTAL_DE_BIMESTRES } from '../features/rankings/rankings.tipos'
 import type {
   ItemDeAluno,
@@ -557,16 +563,25 @@ export function empate(
  * `lancamentosDoComponente`: é o que deixa a página recarregar sozinha e mostrar
  * a etiqueta "Encerrado" e as abas de montagem travadas, sem o teste precisar
  * reescrever a resposta da competição entre um `act` e outro.
+ *
+ * `aposGravar` é o gancho para o que o encerramento também provoca: o
+ * encerramento de um bimestre com empate faz nascer uma pendência de desempate, e
+ * essa ligação está na API, não na tela. Receber um callback mantém essa ordem
+ * fora do teste — e sem ele, o cenário teria de fazer a pendência existir *antes*
+ * do encerramento, que é um empate que ninguém teve.
  */
 export function encerramentoAceito(
   resultado: ResultadoDoEncerramento,
   bimestres: Bimestre[],
+  aposGravar?: (bimestreId: string) => void,
 ) {
   return http.post(`${API}/bimestres/:id/encerrar`, ({ params }) => {
     const bimestreId = String(params.id)
 
     const alvo = bimestres.find((item) => item.id === bimestreId)
     if (alvo) alvo.situacao = SITUACAO_BIMESTRE.ENCERRADO
+
+    aposGravar?.(bimestreId)
 
     return HttpResponse.json({ ...resultado, bimestreId })
   })
@@ -601,6 +616,135 @@ export function encerramentoRecusado(mensagem: string, status = 409) {
   return http.post(`${API}/bimestres/:id/encerrar`, () =>
     HttpResponse.json({ statusCode: status, message: mensagem, error: 'Conflict' }, { status }),
   )
+}
+
+/* --------------------------------------------------------------- desempate -- */
+
+/**
+ * Pendência de desempate, como `GET .../desempate/pendencias` devolve.
+ *
+ * `tipo` e `bimestreId` saem um do outro — parcial tem bimestre, anual não tem —,
+ * então a fábrica deriva o tipo do `bimestreId` em vez de aceitar os dois e
+ * deixar o cenário montar um "anual do 2º bimestre" que a API nunca devolveria.
+ */
+export function pendenciaDeDesempate(
+  parcial: Partial<PendenciaDeDesempate> & Pick<PendenciaDeDesempate, 'valor' | 'grupos'>,
+): PendenciaDeDesempate {
+  const bimestreId = parcial.bimestreId ?? null
+
+  return {
+    tipo: bimestreId ? TIPO_EMPATE.PARCIAL : TIPO_EMPATE.ANUAL,
+    bimestreId,
+    ...parcial,
+  }
+}
+
+/**
+ * Os três endpoints de desempate, sobre uma mesma lista de pendências.
+ *
+ * A lista é mutada dentro dos handlers — como em `encerramentoAceito` — e é isso
+ * que deixa o teste ver a pendência sumir da faixa de avisos depois de gravar, em
+ * vez de ter de reescrever a resposta do `GET` entre um `act` e outro.
+ *
+ * A resposta do endpoint automático é passada pelo teste, e não derivada aqui
+ * pelas pendências: `aplicados` e as posições gravadas dependem de onde o bloco
+ * estava no ranking, informação que a pendência não carrega. Derivá-la no fixture
+ * seria inventar o dado que o critério automático produz.
+ *
+ * O `POST` manual devolve exatamente o que a API devolve — as posições gravadas,
+ * com a origem `MANUAL` — porque é essa resposta que a tela usa para confirmar o
+ * que foi gravado.
+ */
+export function desempateDaCompeticao(
+  pendencias: PendenciaDeDesempate[],
+  opcoes: { automatico?: RespostaDoDesempateAutomatico } = {},
+) {
+  /*
+   * Um empate deixa de ser pendência quando todos os seus grupos foram gravados —
+   * é a mesma condição de `carregarGruposResolvidos` na API, e não "algum deles",
+   * que deixaria a pendência de um empate de três equipes voltar na próxima busca.
+   */
+  function resolver(grupoIds: string[]) {
+    const resolvidos = new Set(grupoIds)
+
+    for (let indice = pendencias.length - 1; indice >= 0; indice -= 1) {
+      const alvo = pendencias[indice]
+      if (alvo?.grupos.every((grupo) => resolvidos.has(grupo.grupoId))) {
+        pendencias.splice(indice, 1)
+      }
+    }
+  }
+
+  return [
+    http.get(`${API}/competicoes/:id/desempate/pendencias`, () => HttpResponse.json(pendencias)),
+
+    http.post(`${API}/competicoes/:id/desempate`, async ({ request }) => {
+      const { bimestreId, ordem } = (await request.json()) as CorpoDoDesempate
+
+      // A API recusa posição repetida e grupo repetido antes de gravar qualquer
+      // coisa (RN24). O teste que precisa dessa recusa usa `desempateRecusado`;
+      // aqui a conferência existe para que uma tela que envie ordem inválida não
+      // "passe" num handler que aceitaria.
+      if (new Set(ordem.map((item) => item.posicao)).size !== ordem.length) {
+        return HttpResponse.json(
+          erroDaApi(400, 'As posições do desempate devem ser únicas.'),
+          { status: 400 },
+        )
+      }
+
+      resolver(ordem.map((item) => item.grupoId))
+
+      return HttpResponse.json({
+        bimestreId: bimestreId ?? null,
+        desempates: ordem.map((item) => ({
+          grupoId: item.grupoId,
+          posicao: item.posicao,
+          origem: ORIGEM_DESEMPATE.MANUAL,
+        })),
+      })
+    }),
+
+    http.post(`${API}/competicoes/:id/desempate/aplicar-automatico`, ({ request }) => {
+      const resposta = opcoes.automatico ?? {
+        bimestreId: null,
+        aplicados: 0,
+        desempates: [],
+        residuais: [],
+      }
+
+      /*
+       * Sem desempate gravado, nada sai da lista: é o caso de `aplicados: 0` com
+       * residual, em que a API não grava nada e o empate continua pendente — e o
+       * teste precisa ver a pendência continuar ali.
+       */
+      if (resposta.desempates.length > 0) {
+        resolver(resposta.desempates.map((desempate) => desempate.grupoId))
+      }
+
+      return HttpResponse.json({
+        ...resposta,
+        bimestreId: new URL(request.url).searchParams.get('bimestreId'),
+      })
+    }),
+  ]
+}
+
+/**
+ * Desempate recusado pela API nos dois `POST`.
+ *
+ * O caso que importa para a tela é o 400 das posições — a mensagem que o
+ * professor recebe quando tenta gravar uma ordem que a API não aceita —, e o
+ * 403, que é o que o `traduzirErroDoDesempate` traduz.
+ */
+export function desempateRecusado(mensagem: string, status = 400) {
+  return [
+    http.post(`${API}/competicoes/:id/desempate`, () =>
+      HttpResponse.json(erroDaApi(status, mensagem), { status }),
+    ),
+    http.post(`${API}/competicoes/:id/desempate/aplicar-automatico`, () =>
+      HttpResponse.json(erroDaApi(status, mensagem), { status }),
+    ),
+  ]
 }
 
 /* ---------------------------------------------------------------- rankings -- */

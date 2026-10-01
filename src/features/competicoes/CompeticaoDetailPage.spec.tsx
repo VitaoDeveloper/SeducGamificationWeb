@@ -14,6 +14,7 @@ import {
   bimestre,
   competicao,
   componentesDoBimestre as componentesDoBimestreResposta,
+  desempateDaCompeticao,
   grupo,
   lancamento,
   lecionamento,
@@ -90,6 +91,13 @@ function grupos() {
   })
 }
 
+/**
+ * Cenário da página, com a listagem de pendências de desempate vazia.
+ *
+ * Desde a Etapa 09 a página busca as pendências na montagem, e a ausência do
+ * handler faria a tela renderizar um aviso de falha que estes testes não estão
+ * exercitando — um erro de cenário que se apresenta como erro de produto.
+ */
 function cenario() {
   return [
     http.get(`${API}/competicoes/:id`, () =>
@@ -98,6 +106,7 @@ function cenario() {
     ...salasDoProfessor([SALA], { [SALA.id]: [LECIONAMENTO] }),
     http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
     grupos(),
+    ...desempateDaCompeticao([]),
   ]
 }
 

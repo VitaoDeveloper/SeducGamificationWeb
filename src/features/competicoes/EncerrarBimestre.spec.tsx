@@ -15,6 +15,7 @@ import {
   bimestre,
   competicao,
   componentesDoBimestre as respostaDeComponentes,
+  desempateDaCompeticao,
   empate,
   encerramento,
   encerramentoAceito,
@@ -25,6 +26,7 @@ import {
   materia,
   materiaFechada,
   membro,
+  pendenciaDeDesempate,
   sala,
   salasDoProfessor,
   sinteseDoAluno,
@@ -36,6 +38,7 @@ import { CompeticaoDetailPage } from './CompeticaoDetailPage'
 import { recusaDoEncerramento } from './encerramento.api'
 import { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
 import type { Bimestre } from './competicoes.tipos'
+import type { PendenciaDeDesempate } from './desempate.tipos'
 
 /*
  * A Etapa 07 é a única da série em que a tela escreve algo que não dá para
@@ -90,11 +93,16 @@ function quatroBimestres(aberto: number): Bimestre[] {
 }
 
 /**
- * Cenário da página: competição com os bimestres, sala, lecionamento, alunos e
- * grupos. Quem muda de comportamento (o encerramento) entra por fora, com
- * `server.use(...)`.
+ * Cenário da página: competição com os bimestres, sala, lecionamento, alunos,
+ * grupos e as pendências de desempate. Quem muda de comportamento (o
+ * encerramento, o desempate) entra por fora, com `server.use(...)`.
+ *
+ * A lista de pendências entra aqui mesmo nos testes que não têm empate nenhum:
+ * desde a Etapa 09 a página busca as pendências na montagem, e uma tela que
+ * deixasse a requisição sem resposta quebraria o critério de aceite do
+ * encerramento com um erro que não tem nada a ver com ele.
  */
-function cenario(bimestres: Bimestre[]) {
+function cenario(bimestres: Bimestre[], pendencias: PendenciaDeDesempate[] = []) {
   return [
     http.get(`${API}/competicoes/:id`, () =>
       HttpResponse.json({ ...COMPETICAO, bimestres }),
@@ -128,6 +136,7 @@ function cenario(bimestres: Bimestre[]) {
       HttpResponse.json(validacaoDePesos([MATEMATICA_FECHADA])),
     ),
     ...listagemDeLancamentos([]),
+    ...desempateDaCompeticao(pendencias),
   ]
 }
 
@@ -324,8 +333,13 @@ describe('Encerramento de bimestre', () => {
     const pessoa = userEvent.setup()
     const bimestres = quatroBimestres(1)
 
+    // A pendência nasce depois do encerramento: o cenário começa com a lista vazia
+    // e o `POST` a preenche, como a API faz — o desempate pendente é consequência
+    // de encerrar, e o teste precisa provar que a tela o busca de novo.
+    const pendencias: PendenciaDeDesempate[] = []
+
     server.use(
-      ...cenario(bimestres),
+      ...cenario(bimestres, pendencias),
       encerramentoAceito(
         encerramento({
           bimestreId: 'b1',
@@ -344,6 +358,18 @@ describe('Encerramento de bimestre', () => {
           ],
         }),
         bimestres,
+        () => {
+          pendencias.push(
+            pendenciaDeDesempate({
+              bimestreId: 'b1',
+              valor: 8.2,
+              grupos: [
+                { grupoId: 'g1', nome: 'Equipe Alfa', valor: 8.2 },
+                { grupoId: 'g2', nome: 'Equipe Beta', valor: 8.2 },
+              ],
+            }),
+          )
+        },
       ),
     )
     abrirSessao()
@@ -363,11 +389,9 @@ describe('Encerramento de bimestre', () => {
     // lista de bimestres, que é uma `<ul>` de itens.
     const faixa = within(await screen.findByRole('alert'))
     expect(faixa.getByRole('listitem')).toHaveTextContent('8.20 — Equipe Alfa e Equipe Beta')
-    // E o caminho para resolver fica à mão, com a promessa de quando chega.
-    expect(screen.getByRole('button', { name: 'Resolver desempate' })).toHaveAttribute(
-      'title',
-      'Chega na Etapa 09',
-    )
+    // E o caminho para resolver está à mão de verdade: o botão abre a tela de
+    // desempate, que é o que a Etapa 09 entrega no lugar da promessa de "em breve".
+    expect(faixa.getByRole('button', { name: 'Resolver desempate' })).toBeEnabled()
   })
 
   it('sinaliza a conclusão da competição ao encerrar o 4º bimestre', async () => {

@@ -14,9 +14,10 @@ import { formatarData, rotuloDoBimestre } from './bimestres'
 import { useCompeticao, useContextoDaCompeticao, useGrupos } from './competicoes.hooks'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
-import { AlertaDeEmpates } from './AlertaDeEmpates'
+import { AlertaDeDesempate } from './AlertaDeDesempate'
 import { AvisoDeConclusao } from './AvisoDeConclusao'
 import { ComponentesDePontuacao } from './ComponentesDePontuacao'
+import { DesempateForm } from './DesempateForm'
 import { EncerrarBimestre } from './EncerrarBimestre'
 import { GerenciarMembros } from './GerenciarMembros'
 import { LancamentosDeComponente } from './LancamentosDeComponente'
@@ -29,7 +30,9 @@ import { NovoGrupoForm } from './NovoGrupoForm'
 import { SelecaoDeBimestre } from './SelecaoDeBimestre'
 import { rotaDasCompeticoes } from '../salas/rotas'
 import { useAlunos } from '../salas/salas.hooks'
+import { usePendenciasDeDesempate } from './desempate.hooks'
 import type { ResultadoDoEncerramento } from './encerramento.tipos'
+import type { PendenciaDeDesempate } from './desempate.tipos'
 
 const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
 const ABA_ATIVA = 'bg-primary-50 text-primary-700'
@@ -108,6 +111,33 @@ export function CompeticaoDetailPage() {
    */
   const [visaoInicialDoRanking, setVisaoInicialDoRanking] = useState<TipoRanking | null>(null)
 
+  /*
+   * Empates que a API ainda devolve como pendentes, e o desempate em aberto.
+   *
+   * A pendência vem do servidor e não do encerramento desta sessão: o empate do
+   * 1º bimestre continua pendente três semanas depois, com o professor entrando
+   * na competição numa tela nova. Por isso ela é buscada com a competição e não
+   * derivada do `ResultadoDoEncerramento`, que existe apenas enquanto a aba está
+   * aberta.
+   *
+   * E o desempate em aberto é uma pendência — e não um id — porque o formulário
+   * precisa saber quais equipes empataram e em que escopo para montar a tela
+   * sem uma segunda busca.
+   */
+  const pendencias = usePendenciasDeDesempate(competicao.dados?.id)
+  const [desempateAberto, setDesempateAberto] = useState<PendenciaDeDesempate | null>(null)
+
+  /*
+   * Quantas vezes um desempate foi gravado, para o ranking buscar de novo.
+   *
+   * A posição gravada no desempate é a que `GET .../ranking` devolve, e o ranking
+   * é a única vista da tela que mostra essa ordem: sem esta contagem, a página
+   * continuaria mostrando o empate resolvido como empate depois de o professor
+   * ter clicado em salvar. É um contador, e não um booleano, porque dois
+   * desempates no mesmo minuto têm de gerar duas buscas.
+   */
+  const [desempatesGravados, setDesempatesGravados] = useState(0)
+
   const bimestres = competicao.dados?.bimestres ?? []
 
   /*
@@ -146,15 +176,27 @@ export function CompeticaoDetailPage() {
   const resultadoDoBimestre = bimestreAtual ? encerramentos[bimestreAtual.id] : undefined
 
   /*
-   * A faixa de avisos do encerramento só existe quando há algo a dizer — empate
-   * detectado ou competição concluída. Um container vazio empurraria a barra de
-   * abas para baixo sem motivo, e é este mesmo espaço que a Etapa 09 vai reusar
-   * para a pendência de desempate.
+   * A faixa de avisos da página: a pendência de desempate e o que o encerramento
+   * desta sessão deixou para dizer.
+   *
+   * O container só existe quando há algo a mostrar — um container vazio
+   * empurraria a barra de abas para baixo sem motivo. E o desempate passou a
+   * morar aqui dentro desde a Etapa 09, no lugar que a Etapa 07 tinha reservado
+   * para ele: a pendência de um empate é o aviso mais importante que esta página
+   * tem, e ele vale tanto para quem acabou de encerrar quanto para quem voltou
+   * três semanas depois.
+   *
+   * O empate detectado no encerramento em si não ganha mais uma faixa: a mesma
+   * informação volta na pendência que a API devolve, com o caminho para resolver
+   * já funcionando. Duas faixas para o mesmo empate diriam ao professor que são
+   * dois problemas.
    */
   const empatesDoBimestre = resultadoDoBimestre?.empates ?? []
-  const mostrarAvisos =
+  const pendenciasDeDesempate = pendencias.dados ?? []
+  const avisoDoEncerramento =
     resultadoDoBimestre !== undefined &&
     (empatesDoBimestre.length > 0 || resultadoDoBimestre.competicaoConcluida)
+  const mostrarAvisos = avisoDoEncerramento || pendenciasDeDesempate.length > 0 || !!pendencias.erro
 
   /*
    * Trocar de bimestre descarta o componente escolhido: o mesmo componente em outro
@@ -187,7 +229,7 @@ export function CompeticaoDetailPage() {
   /**
    * O que a página faz depois de um encerramento aceito.
    *
-   * Quatro efeitos, na ordem em que importam:
+   * Cinco efeitos, na ordem em que importam:
    *
    * 1. Guarda o resultado, que é a síntese oficial e a lista de empates.
    * 2. Fixa o bimestre encerrado como o selecionado. Sem isso, a escolha padrão
@@ -199,6 +241,10 @@ export function CompeticaoDetailPage() {
    * 4. Recarrega a competição, para a situação ENCERRADO chegar do servidor — a
    *    etiqueta do bimestre e o bloqueio das abas de montagem dependem disso, e
    *    localmente o `bimestre` ainda diz ABERTO.
+   * 5. Recarrega as pendências de desempate. O encerramento é o único momento em
+   *    que um empate nasce, e a chave da pendência é o id da competição — que
+   *    não muda aqui. Sem este `recarregar`, o empate que acabou de ser detectado
+   *    ficaria invisível até o professor recarregar a página.
    */
   function aoEncerrar(resultado: ResultadoDoEncerramento) {
     setEncerramentos((atuais) => ({ ...atuais, [resultado.bimestreId]: resultado }))
@@ -207,6 +253,20 @@ export function CompeticaoDetailPage() {
     setAba('previa')
     toast.success(`${rotuloDoBimestre(resultado.numero)} encerrado. Síntese gravada pela API.`)
     competicao.recarregar()
+    pendencias.recarregar()
+  }
+
+  /**
+   * O que a página faz depois de um desempate gravado, manual ou automático.
+   *
+   * Duas listas dependem disso, e as duas são de fora do diálogo: a pendência que
+   * originou o desempate some da lista, e o ranking passa a mostrar as posições
+   * gravadas. Nenhuma das duas é óbvia para quem está dentro do formulário — e é
+   * por isso que o formulário avisa e a página decide.
+   */
+  function aoResolverDesempate() {
+    pendencias.recarregar()
+    setDesempatesGravados((atual) => atual + 1)
   }
 
   if (competicao.carregando) {
@@ -257,18 +317,27 @@ export function CompeticaoDetailPage() {
       />
 
       {/*
-       * Os avisos do encerramento ficam acima das abas, não dentro de uma delas:
-       * empate e fim de competição não pertencem ao painel da síntese, e um
-       * professor na aba de Lançamentos também precisa saber que o bimestre em
-       * questão fechou com duas equipes empatadas.
+       * Os avisos ficam acima das abas, não dentro de uma delas: desempate
+       * pendente e fim de competição não pertencem ao painel da síntese, e um
+       * professor na aba de Lançamentos também precisa saber que um bimestre
+       * fechou com duas equipes empatadas.
        */}
-      {resultadoDoBimestre && mostrarAvisos ? (
+      {mostrarAvisos ? (
         <div className="mt-6 space-y-4">
-          <AlertaDeEmpates empates={empatesDoBimestre} numeroDoBimestre={resultadoDoBimestre.numero} />
-          <AvisoDeConclusao
-            competicaoConcluida={resultadoDoBimestre.competicaoConcluida}
-            aoVerRanking={abrirRankingAnual}
+          <AlertaDeDesempate
+            pendencias={pendenciasDeDesempate}
+            bimestres={bimestres}
+            erro={pendencias.erro}
+            aoRecarregar={pendencias.recarregar}
+            aoResolver={setDesempateAberto}
           />
+
+          {avisoDoEncerramento && resultadoDoBimestre ? (
+            <AvisoDeConclusao
+              competicaoConcluida={resultadoDoBimestre.competicaoConcluida}
+              aoVerRanking={abrirRankingAnual}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -484,6 +553,12 @@ export function CompeticaoDetailPage() {
            * A `key` remonta a aba quando o atalho do aviso muda a visão
            * desejada: a visão inicial é lida no `useState` do componente, e sem
            * o remonte um clique no atalho estando já na aba não teria efeito.
+           *
+           * Já `revalidacao` não remonta nada: ela entra na chave da busca dos
+           * rankings, que é o que faz a posição gravada aparecer aqui. Uma `key`
+           * por desempate resolveria, mas derrubaria a aba inteira — e perder a
+           * visão que o professor escolheu para conferir se o desempate deu certo é
+           * o pior jeito de mostrar que deu certo.
            */}
           {aba === 'rankings' ? (
             <RankingDaCompeticao
@@ -491,10 +566,26 @@ export function CompeticaoDetailPage() {
               competicaoId={dados.id}
               bimestres={bimestres}
               visaoInicial={visaoInicialDoRanking ?? undefined}
+              revalidacao={desempatesGravados}
             />
           ) : null}
         </div>
       </div>
+
+      {/*
+       * O formulário fica na página, e não dentro do banner, porque ele é um
+       * diálogo: o `Modal` se ancora em `document.body`, e quem o abre é a
+       * pendência — que pode vir de qualquer uma das linhas do aviso.
+       */}
+      <DesempateForm
+        aberto={desempateAberto !== null}
+        competicaoId={dados.id}
+        pendencia={desempateAberto}
+        bimestres={bimestres}
+        revalidacao={desempatesGravados}
+        onClose={() => setDesempateAberto(null)}
+        onResolvido={aoResolverDesempate}
+      />
     </>
   )
 }

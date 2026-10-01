@@ -1,11 +1,13 @@
-export { AlertaDeEmpates } from './AlertaDeEmpates'
-export type { AlertaDeEmpatesProps } from './AlertaDeEmpates'
+export { AlertaDeDesempate } from './AlertaDeDesempate'
+export type { AlertaDeDesempateProps } from './AlertaDeDesempate'
 export { AvisoDeConclusao } from './AvisoDeConclusao'
 export type { AvisoDeConclusaoProps } from './AvisoDeConclusao'
 export { CompeticaoDetailPage } from './CompeticaoDetailPage'
 export { CompeticoesDaSala } from './CompeticoesDaSala'
 export { ComponentesDePontuacao } from './ComponentesDePontuacao'
 export type { ComponentesDePontuacaoProps } from './ComponentesDePontuacao'
+export { DesempateForm } from './DesempateForm'
+export type { DesempateFormProps } from './DesempateForm'
 export { EncerrarBimestre } from './EncerrarBimestre'
 export type { EncerrarBimestreProps } from './EncerrarBimestre'
 export { GerenciarMembros } from './GerenciarMembros'
@@ -115,3 +117,27 @@ export type {
   SinteseOficialDoGrupo,
   TotaisDoEncerramento,
 } from './encerramento.tipos'
+export {
+  aplicarCriterioAutomatico,
+  listarPendenciasDeDesempate,
+  resolverDesempate,
+  traduzirErroDoDesempate,
+} from './desempate.api'
+export { usePendenciasDeDesempate } from './desempate.hooks'
+export {
+  ordemDoDesempate,
+  posicaoDoBlocoEmpatado,
+  posicaoRepetida,
+  posicoesIniciaisDoDesempate,
+  rotuloDoEscopoDoDesempate,
+} from './desempate'
+export { ORIGEM_DESEMPATE, TIPO_EMPATE } from './desempate.tipos'
+export type {
+  CorpoDoDesempate,
+  DesempateGravado,
+  EmpateResidual,
+  OrdemDeDesempate,
+  PendenciaDeDesempate,
+  RespostaDoDesempate,
+  RespostaDoDesempateAutomatico,
+} from './desempate.tipos'
