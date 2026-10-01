@@ -22,6 +22,8 @@ import { GerenciarMembros } from './GerenciarMembros'
 import { LancamentosDeComponente } from './LancamentosDeComponente'
 import { PreviaDaSintese } from './PreviaDaSintese'
 import { SintesesOficiais } from './SintesesOficiais'
+import { RankingDaCompeticao, TIPO_RANKING } from '../rankings'
+import type { TipoRanking } from '../rankings'
 import { modeloAvaliacaoDaEscola } from './modelo-avaliacao'
 import { NovoGrupoForm } from './NovoGrupoForm'
 import { SelecaoDeBimestre } from './SelecaoDeBimestre'
@@ -33,34 +35,34 @@ const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
 const ABA_ATIVA = 'bg-primary-50 text-primary-700'
 
 /** As seções da competição, na ordem em que o professor monta o bimestre. */
-type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa'
+type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa' | 'rankings'
 
 /**
- * Abas da competição, com a de rankings ainda por vir.
+ * Abas da competição.
  *
  * A navegação já nasceu na Etapa 04 porque a tela ia crescer: pontuação, lançamentos
  * e rankings penduram-se no mesmo "qual bimestre estou vendo". Deixar a aba futura
- * visível e desabilitada evita que a página pareça pronta e depois se reorganize
- * inteira quando a etapa chegar.
+ * visível e desabilitada evitava que a página parecesse pronta e depois se
+ * reorganizasse inteira quando a etapa chegasse — a de rankings foi exatamente
+ * esse caso, e agora é a última da lista.
  *
  * "Prévia" entrou na Etapa 06 entre Lançamentos e Rankings, que é a ordem em que
  * o professor trabalha: lança, confere como a turma está, e só depois encerra.
  * Na Etapa 07 a mesma aba ganha o outro nome depois do encerramento: com a síntese
  * gravada, o que está na tela deixou de ser prévia (ver `rotuloDaAba`).
+ *
+ * "Rankings" é a única que não se pendura no seletor de bimestre da página: os
+ * três rankings têm vida própria (parcial escolhe bimestre, anual e individual
+ * somam os quatro), e reaproveitar o seletor global obrigaria o professor a
+ * trocar o bimestre da página para ver o ranking do ano.
  */
 const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
   { id: 'grupos', rotulo: 'Grupos' },
   { id: 'componentes', rotulo: 'Componentes' },
   { id: 'lancamentos', rotulo: 'Lançamentos' },
   { id: 'previa', rotulo: 'Prévia' },
+  { id: 'rankings', rotulo: 'Rankings' },
 ]
-
-/*
- * A aba que ainda não existe: fica visível e desabilitada, com o aviso de quando
- * chega. O número é o da Etapa 08 do plano desta GUI, que é onde o ranking entra —
- * a Etapa 06 é a prévia de síntese, e ela já está na barra acima.
- */
-const ABA_A_CHEGAR = { rotulo: 'Rankings', etapa: 'Chega na Etapa 08' }
 
 /**
  * Detalhe da competição: os quatro bimestres, os grupos, a pontuação e os lançamentos.
@@ -94,6 +96,17 @@ export function CompeticaoDetailPage() {
    * a API gravou nele.
    */
   const [encerramentos, setEncerramentos] = useState<Record<string, ResultadoDoEncerramento>>({})
+
+  /*
+   * Visão de ranking com que a aba abre.
+   *
+   * Só existe para o atalho do aviso de conclusão: encerrar o 4º bimestre gera a
+   * pergunta "e quem ganhou o ano?", e a resposta está no ranking anual, não no
+   * parcial do bimestre que acabou de fechar. Sem isto, o botão jogaria o
+   * professor na aba com o parcial aberto e ele teria de caçar o botão "Anual".
+   * `null` nos outros casos, e aí a aba abre no padrão do próprio componente.
+   */
+  const [visaoInicialDoRanking, setVisaoInicialDoRanking] = useState<TipoRanking | null>(null)
 
   const bimestres = competicao.dados?.bimestres ?? []
 
@@ -155,6 +168,20 @@ export function CompeticaoDetailPage() {
 
   function aoMudarGrupos() {
     grupos.recarregar()
+  }
+
+  /**
+   * Abre a aba de rankings já na visão anual.
+   *
+   * Trocar de aba por conta própria (`setAba('rankings')`) deixaria a visão
+   * inicial de uma abertura anterior, ou seja, o atalho do aviso só funcionaria
+   * na primeira vez. O estado volta a `null` ao trocar a aba, para que a próxima
+   * abertura use o padrão do componente — o botão é um atalho pontual, não a
+   * definição de como a aba sempre abre.
+   */
+  function abrirRankingAnual() {
+    setVisaoInicialDoRanking(TIPO_RANKING.ANUAL)
+    setAba('rankings')
   }
 
   /**
@@ -238,7 +265,10 @@ export function CompeticaoDetailPage() {
       {resultadoDoBimestre && mostrarAvisos ? (
         <div className="mt-6 space-y-4">
           <AlertaDeEmpates empates={empatesDoBimestre} numeroDoBimestre={resultadoDoBimestre.numero} />
-          <AvisoDeConclusao competicaoConcluida={resultadoDoBimestre.competicaoConcluida} />
+          <AvisoDeConclusao
+            competicaoConcluida={resultadoDoBimestre.competicaoConcluida}
+            aoVerRanking={abrirRankingAnual}
+          />
         </div>
       ) : null}
 
@@ -254,20 +284,18 @@ export function CompeticaoDetailPage() {
             type="button"
             role="tab"
             aria-selected={item.id === aba}
-            onClick={() => setAba(item.id)}
+            onClick={() => {
+              // Abrir a aba pelo próprio botão usa o padrão dela; o atalho do
+              // aviso de conclusão é que escolhe a visão anual (ver
+              // `abrirRankingAnual`).
+              setVisaoInicialDoRanking(null)
+              setAba(item.id)
+            }}
             className={`${ABA} ${item.id === aba ? ABA_ATIVA : 'text-neutral-600 hover:text-primary-700'}`}
           >
             {rotuloDaAba(item, resultadoDoBimestre)}
           </button>
         ))}
-
-        <span
-          aria-disabled
-          title={ABA_A_CHEGAR.etapa}
-          className={`${ABA} cursor-not-allowed text-neutral-400`}
-        >
-          {ABA_A_CHEGAR.rotulo}
-        </span>
       </nav>
 
       <div className="mt-6 space-y-6">
@@ -440,6 +468,29 @@ export function CompeticaoDetailPage() {
               alunos={alunos.dados ?? []}
               grupos={listaDeGrupos}
               modelo={modelo}
+            />
+          ) : null}
+
+          {/*
+           * A aba de rankings se resolve sozinha: ela recebe a competição e os
+           * bimestres e busca o que precisa. Não entra na escolha de "qual
+           * bimestre estou vendo" da página de propósito — os três rankings têm
+           * escopos diferentes (o parcial é de um bimestre, o anual e o
+           * individual somam os quatro), e atrelar o parcial ao seletor global
+           * faria o professor trocar o bimestre duas vezes para comparar um
+           * bimestre com o ano.
+           */}
+          {/*
+           * A `key` remonta a aba quando o atalho do aviso muda a visão
+           * desejada: a visão inicial é lida no `useState` do componente, e sem
+           * o remonte um clique no atalho estando já na aba não teria efeito.
+           */}
+          {aba === 'rankings' ? (
+            <RankingDaCompeticao
+              key={`rankings-${visaoInicialDoRanking ?? 'padrao'}`}
+              competicaoId={dados.id}
+              bimestres={bimestres}
+              visaoInicial={visaoInicialDoRanking ?? undefined}
             />
           ) : null}
         </div>

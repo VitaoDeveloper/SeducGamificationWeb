@@ -20,11 +20,15 @@ import {
   listagemDeLancamentos,
   materiaFechada,
   membro,
+  linhaDeGrupo,
+  rankingDeGrupo,
+  rankingsDaCompeticao,
   sala,
   salasDoProfessor,
   validacaoDePesos,
 } from '../../test/handlers'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
+import { TIPO_RANKING } from '../rankings/rankings.tipos'
 import { CompeticaoDetailPage } from './CompeticaoDetailPage'
 import { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
 import type { Lancamento } from './componentes-pontuacao.tipos'
@@ -194,19 +198,29 @@ describe('CompeticaoDetailPage', () => {
     expect(await screen.findByLabelText('Componente de pontuação')).toBeInTheDocument()
   })
 
-  it('deixa a aba de rankings visível e desabilitada, sem virar um botão', async () => {
-    server.use(...cenario())
+  it('abre a aba de rankings com o ranking parcial do bimestre encerrado', async () => {
+    const pessoa = userEvent.setup()
+    server.use(
+      ...cenario(),
+      rankingsDaCompeticao({
+        parcial: rankingDeGrupo({
+          competicaoId: COMPETICAO.id,
+          tipo: TIPO_RANKING.PARCIAL,
+          bimestreId: 'b4',
+          itens: [linhaDeGrupo({ grupoId: 'g1', nome: 'Alpha', posicao: 1, valor: 9 })],
+        }),
+      }),
+    )
     abrirSessao()
 
     renderizarDetalhe()
     await screen.findAllByText('Alpha')
 
-    // A prévia é a Etapa 06, e ela já está na barra; o ranking é o que vem depois.
-    const rankings = screen.getByTitle('Chega na Etapa 08')
-    expect(rankings).toHaveTextContent('Rankings')
-    expect(rankings).toHaveAttribute('aria-disabled', 'true')
-    // Não é um `button`, então nem dá para focar por teclado e clicar por engano.
-    expect(rankings.tagName).toBe('SPAN')
+    // A aba era um aviso desabilitado até a Etapa 07; agora é navegação de verdade.
+    await pessoa.click(screen.getByRole('tab', { name: 'Rankings' }))
+
+    expect(screen.getByRole('tab', { name: 'Rankings' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('heading', { name: 'Ranking parcial' })).toBeInTheDocument()
   })
 
   it('abre a prévia da síntese na aba própria, com as notas já lançadas', async () => {

@@ -402,11 +402,9 @@ describe('Encerramento de bimestre', () => {
     expect(
       await screen.findByText('Competição concluída — todos os bimestres estão encerrados.'),
     ).toBeInTheDocument()
-    // O atalho aponta para o ranking, que é a Etapa 08 — de fora, mas à vista.
-    expect(screen.getByRole('button', { name: 'Ver o ranking final' })).toHaveAttribute(
-      'title',
-      'Chega na Etapa 08',
-    )
+    // O atalho era um aviso desabilitado até a Etapa 07; agora é a ação que abre
+    // o ranking, e por isso não está mais inerte.
+    expect(screen.getByRole('button', { name: 'Ver o ranking final' })).toBeEnabled()
   })
 })
 

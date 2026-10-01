@@ -24,6 +24,17 @@ export interface Requisicao<T> {
 export interface OpcoesDaRequisicao {
   /** Texto quando a falha não tem mensagem da API (rede, timeout). */
   erroPadrao?: string
+  /**
+   * Reescreve a mensagem de uma falha específica; `null` mantém a mensagem da
+   * API.
+   *
+   * Existe porque `mensagemDeErro` sabe ler o corpo do NestJS, mas há recusas em
+   * que a mensagem do backend não serve para a tela: o `403` de acesso a um
+   * ranking chega como "Forbidden", que não diz a ninguém o que fazer. Quem
+   * chama trata o caso que conhece e devolve `null` no resto, e o tratamento
+   * padrão continua valendo para rede, timeout e erros de aplicação.
+   */
+  traduzirErro?: (falha: unknown) => string | null
 }
 
 /** Resposta de uma requisição, com o pedido a que pertence. */
@@ -57,7 +68,10 @@ interface Resposta<T> {
 export function useRequisicao<T>(
   carregar: () => Promise<T>,
   chave: string,
-  { erroPadrao = 'Não foi possível carregar os dados.' }: OpcoesDaRequisicao = {},
+  {
+    erroPadrao = 'Não foi possível carregar os dados.',
+    traduzirErro,
+  }: OpcoesDaRequisicao = {},
 ): Requisicao<T> {
   const [resposta, setResposta] = useState<Resposta<T> | null>(null)
   const [tentativa, setTentativa] = useState(0)
@@ -70,12 +84,14 @@ export function useRequisicao<T>(
    */
   const carregador = useRef(carregar)
   const padraoDeErro = useRef(erroPadrao)
+  const tradutor = useRef(traduzirErro)
 
   // Antes do efeito da busca, para que a busca do render já leia a versão nova.
   useEffect(() => {
     carregador.current = carregar
     padraoDeErro.current = erroPadrao
-  }, [carregar, erroPadrao])
+    tradutor.current = traduzirErro
+  }, [carregar, erroPadrao, traduzirErro])
 
   useEffect(() => {
     let cancelado = false
@@ -87,7 +103,8 @@ export function useRequisicao<T>(
       },
       (falha) => {
         if (cancelado) return
-        const erro = mensagemDeErro(falha, padraoDeErro.current)
+        const erro =
+          tradutor.current?.(falha) ?? mensagemDeErro(falha, padraoDeErro.current)
         // Uma falha ao recarregar não apaga a lista que já estava boa: o
         // professor continua lendo os nomes, com o aviso do erro em cima.
         setResposta((atual) => ({

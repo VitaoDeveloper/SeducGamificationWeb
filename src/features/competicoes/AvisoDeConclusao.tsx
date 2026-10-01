@@ -9,6 +9,8 @@ export interface AvisoDeConclusaoProps {
    * da API não precisa lembrar de um sinônimo.
    */
   competicaoConcluida: boolean
+  /** Abre a aba de rankings; sem isso, o botão some em vez de ficar inerte. */
+  aoVerRanking?: () => void
 }
 
 /**
@@ -26,10 +28,15 @@ export interface AvisoDeConclusaoProps {
  *
  * Os pontos finais que a API devolve em `pontuacoesFinais` não são mostrados aqui
  * de propósito: ordená-los com posição, empate e desempate é a aba de Rankings
- * (Etapa 08), e o banner só aponta para lá. A ação fica visível e desabilitada,
- * pelo mesmo motivo da aba ainda-a-chegar da página da competição.
+ * (Etapa 08), e o banner só aponta para lá.
+ *
+ * O atalho passou de botão desabilitado para ação de verdade na Etapa 08. A
+ * competência de terminar a competição gera a pergunta "e agora, quem ganhou?",
+ * e o banner é o único lugar da tela onde essa pergunta é feita: um professor
+ * que acabou de fechar o 4º bimestre não deveria precisar descobrir a aba para
+ * ver o resultado do ano.
  */
-export function AvisoDeConclusao({ competicaoConcluida }: AvisoDeConclusaoProps) {
+export function AvisoDeConclusao({ competicaoConcluida, aoVerRanking }: AvisoDeConclusaoProps) {
   if (!competicaoConcluida) return null
 
   return (
@@ -42,14 +49,16 @@ export function AvisoDeConclusao({ competicaoConcluida }: AvisoDeConclusaoProps)
         equipe é a soma das sínteses dos quatro bimestres.
       </p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <Button size="sm" variant="secondary" disabled title="Chega na Etapa 08">
-          Ver o ranking final
-        </Button>
-        <span className="text-neutral-500 text-xs">
-          Os rankings chegam na Etapa 08, na aba ao lado.
-        </span>
-      </div>
+      {aoVerRanking ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2.5">
+          <Button size="sm" variant="secondary" onClick={aoVerRanking}>
+            Ver o ranking final
+          </Button>
+          <span className="text-neutral-500 text-xs">
+            Abre a aba Rankings, no ranking anual.
+          </span>
+        </div>
+      ) : null}
     </Alert>
   )
 }

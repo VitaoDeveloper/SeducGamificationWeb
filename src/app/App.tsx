@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ToastProvider } from '../components'
+import { AlunoDashboardPage, ROTA_ALUNO } from '../features/aluno'
 import { AuthProvider, LoginPage, ROTA_LOGIN, rotaInicial, TrocarSenhaPage, useAuth } from '../features/auth'
 import {
   CompeticaoDetailPage,
@@ -16,7 +17,6 @@ import {
 } from '../features/salas'
 import { AuthenticatedLayout } from './AuthenticatedLayout'
 import { ProtectedRoute } from './ProtectedRoute'
-import { EmBrevePage } from './pages/EmBrevePage'
 
 /**
  * Raiz `/` e qualquer caminho desconhecido: leva para a tela inicial do perfil,
@@ -63,7 +63,7 @@ export function App() {
               <Route path={ROTA_SALAS_DETALHE} element={<SalaDetailPage />} />
               <Route path={ROTA_COMPETICAO_DETALHE} element={<CompeticaoDetailPage />} />
               <Route path="conta/senha" element={<TrocarSenhaPage />} />
-              <Route path="em-breve" element={<EmBrevePage />} />
+              <Route path={ROTA_ALUNO} element={<AlunoDashboardPage />} />
             </Route>
 
             <Route path="*" element={<RotaInicial />} />

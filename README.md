@@ -44,7 +44,7 @@ dev server falha na inicialização, o que é um problema visível.
 O login é por **código de matrícula** (padrão `26XXX`), o mesmo para professor e
 aluno. A tela é uma só; quem decide o que aparece depois é o token, que carrega o
 tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
-`/salas` para o professor, `/em-breve` para o aluno, que ainda não tem área.
+`/salas` para o professor, `/aluno` para o aluno.
 
 | Rota                    | Quem entra                          |
 | ----------------------- | ----------------------------------- |
@@ -53,9 +53,9 @@ tipo (`PROFESSOR` ou `ALUNO`) e manda a pessoa para a rota inicial do perfil —
 | `/salas/:salaId`        | professor — sala, lecionamentos e inscrição |
 | `/salas/:salaId/alunos` | professor — alunos da sala e cadastro |
 | `/salas/:salaId/competicoes` | professor — competições de cada lecionamento da sala |
-| `/competicoes/:competicaoId` | professor — bimestres, grupos, componentes de pontuação e lançamentos por bimestre |
+| `/competicoes/:competicaoId` | professor — bimestres, grupos, componentes, lançamentos, prévia e rankings |
+| `/aluno`                | aluno — rankings da competição da sala (Etapa 08) |
 | `/conta/senha`          | qualquer um autenticado             |
-| `/em-breve`             | aluno — área em construção até a Etapa 08 |
 
 ### Onde a sessão mora
 
@@ -143,9 +143,9 @@ Decisões que valem conhecer:
 ## Componentes de pontuação e lançamentos (Etapa 05)
 
 O detalhe da competição virou abas: **Grupos** (Etapa 04), **Componentes**,
-**Lançamentos** e **Prévia** (Etapa 06), com **Rankings** visível e desabilitada
-até a Etapa 08. As quatro penduram a mesma escolha de bimestre, e o seletor
-continua acima das abas.
+**Lançamentos**, **Prévia** (Etapa 06) e **Rankings** (Etapa 08). As quatro
+primeiras penduram a mesma escolha de bimestre, e o seletor continua acima das
+abas; a de rankings tem vida própria e é a última da barra.
 
 **Componentes** mostra um cartão por matéria com os pesos e o indicador de
 fechamento — `100% ✓` ou `faltam X%`. A soma é refeita no front e arredondada a 2
@@ -257,6 +257,66 @@ Decisões que valem conhecer:
 - **Nada é gravado.** A prévia não tem salvamento; a síntese só existe depois do
   encerramento, e vem do backend.
 
+## Rankings — parcial, anual e individual (Etapa 08)
+
+A aba **Rankings** da competição tem três sub-visões atrás de um seletor de
+botões: **Parcial** (com seletor de bimestre), **Anual** e **Individual**. As três
+mostram posição, nome e pontuação, e marcam quem empatou. As sub-visões ficam
+atrás de um seletor, e não empilhadas, porque as escalas são diferentes: o
+parcial vai a 10, o anual soma quatro e vai a 40, e o individual é média —
+mostrar as três juntas daria três colunas "Pontuação" com significados distintos,
+o caminho mais curto para ler `33,10` como se fosse uma nota. Só a visão em
+exibição faz requisição.
+
+Empate é a **posição repetida** com a flag `empate: true` que a API manda; a tela
+não recalcula. `formatarPosicao` escreve `1º`, `2º`…, e o ícone ao lado da
+posição tem o texto "empate" só para leitor de tela. O ranking diz quando ainda é
+**parcial**: com `bimestresEncerrados < 4` (função `resultadoParcial`), o anual e
+o individual mostram "Resultado parcial — N de 4 bimestres encerrados". O parcial
+por bimestre não leva o aviso: ele é um recorte, por definição.
+
+A área do aluno é `/aluno` (`features/aluno/`), que substituiu a rota provisória
+`/em-breve` da Etapa 02. Ela reaproveita o mesmo `SecaoDeRanking` da aba do
+professor, num layout mais simples — só leitura. Todo o desenho da tabela mora em
+`features/rankings/`, compartilhado pelas duas pontas.
+
+Decisões que valem conhecer:
+
+- **O ranking parcial só abre em bimestre encerrado.** A síntese só é gravada no
+  encerramento (Etapa 07), então antes disso a API não tem o que devolver; sem
+  nenhum encerrado, a aba mostra "Nenhum bimestre encerrado ainda" em vez de uma
+  tabela vazia.
+- **O `useRequisicao` ganhou `traduzirErro`.** A recusa de escopo chega como
+  `403`/`Forbidden`, que não diz nada a quem lê; a opção reescreve a mensagem
+  daquele caso e deixa o tratamento padrão para rede, timeout e erro de
+  aplicação. `traduzirErroDoRanking` é quem conhece o `403`.
+- **A linha do aluno no individual leva a marca "Você".** O `id` de `GET
+  /auth/me` é o `alunoId`, então a tela marca a linha dele sem depender de o nome
+  bater. No ranking de equipes não há como resolver o grupo do aluno — não há
+  endpoint que diga a que grupo ele pertence —, e por isso não há destaque lá.
+- **O atalho do fim da competição virou ação.** Encerrar o 4º bimestre mostra
+  "Ver o ranking final", que abre a aba já na visão **anual** (`visaoInicial`).
+  Até a Etapa 07 o botão era um aviso desabilitado.
+
+### Limites da API que moldam a tela
+
+- **Os rankings são endpoints de professor.** A API responde `403` para o aluno
+  (`README-API.md`, seções 7 e 9), e não existe endpoint que liste as competições
+  do aluno — os únicos abertos a ele são os relatórios (Etapa 10). Por isso o
+  dashboard do aluno **existe e funciona**, mas a competição vem na URL, no
+  formato `/aluno?competicaoId=<uuid>` (e `?bimestreId=<uuid>` para o recorte do
+  bimestre). A tela chama os endpoints e trata o `403` com uma mensagem amigável,
+  em vez de supor o acesso. Quando a API abrir os rankings para o aluno e
+  "minhas competições", a página acende sem reescrita; `rotaDoAluno` é o que vira
+  navegação.
+- **O ranking individual é a mesma forma dos de equipe.** `README-API.md` não
+  exemplifica a resposta de `GET /competicoes/:id/ranking-individual`; o tipo
+  `RespostaDoRankingIndividual` assume o mesmo envelope, sem `bimestreId` (é
+  anual). Se a API divergir, é só o tipo e o `buscarRankingIndividual`.
+- **Sem lista de bimestres acessível ao aluno.** O parcial do dashboard depende de
+  o link trazer `?bimestreId`; sem ele, a seção do bimestre não aparece e nenhuma
+  requisição é feita.
+
 ## Testes
 
 Vitest + Testing Library + `msw`, na mesma convenção do backend
@@ -277,7 +337,7 @@ desligar o mock do anterior.
 | ------------------------------ | --------------------------------------------------- |
 | `src/test/setup.ts`            | jest-dom, servidor msw no ar e limpeza de sessão     |
 | `src/test/server.ts`           | o `setupServer` do msw, sem handlers                 |
-| `src/test/handlers.ts`         | fábricas de handler por cenário, de autenticação a lançamentos |
+| `src/test/handlers.ts`         | fábricas de handler por cenário, de autenticação a rankings |
 | `src/test/render.tsx`          | renderiza com `ToastProvider`, `AuthProvider` e `MemoryRouter` |
 
 Dois pontos que valem saber antes de escrever o próximo teste:
@@ -316,13 +376,14 @@ do professor.
 ```
 src/
   app/         rotas e providers globais
-    pages/     telas provisórias ainda fora de feature (/em-breve)
   components/  componentes reutilizáveis (Button, Card, Table, Field, Modal, Toast)
   features/    uma pasta por domínio
     auth/      telas de login e troca de senha, contexto de sessão, rotas
     salas/     listagem, detalhe, inscrição e alunos — a Etapa 03
     competicoes/ competição, bimestres, grupos, componentes, lançamentos e
                 prévia de síntese — as Etapas 04, 05 e 06
+    rankings/  tipos, chamadas e componentes dos três rankings — a Etapa 08
+    aluno/     dashboard do aluno (`/aluno`), sobre os rankings — a Etapa 08
   lib/         cliente HTTP, guarda da sessão, fórmulas de síntese e utilitários
   styles/      tokens de design e estilos globais
   test/        base dos testes: msw, setup e utilitários de render
@@ -350,3 +411,10 @@ no contador de integrantes do grupo. O que ela acrescenta é
 `src/lib/sinteseCalculo.ts` — a cópia das fórmulas do backend, que fica em `lib`
 justamente para não depender de feature, porque a conta é a mesma em dois lugares
 e nenhuma delas é dona dela.
+
+A Etapa 08 acende a aba de rankings que estava desabilitada e cria a feature
+`aluno/`, que aposenta a pasta `app/pages/` e a rota `/em-breve`. `rankings/`
+nasce como feature própria porque a tabela é a mesma para os dois perfis: o
+professor a vê em três sub-visões na competição, e o aluno, em seções no
+dashboard. O `Table` continua sendo a grade, agora com esqueleto de carga também
+na primeira leitura do ranking.

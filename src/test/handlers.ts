@@ -25,6 +25,13 @@ import type {
   SinteseOficialDoAluno,
   SinteseOficialDoGrupo,
 } from '../features/competicoes/encerramento.tipos'
+import { TIPO_RANKING, TOTAL_DE_BIMESTRES } from '../features/rankings/rankings.tipos'
+import type {
+  ItemDeAluno,
+  ItemDeGrupo,
+  RespostaDeRanking,
+  RespostaDoRankingIndividual,
+} from '../features/rankings/rankings.tipos'
 
 /**
  * Handlers de autenticação para os testes, em forma de fábrica.
@@ -560,4 +567,108 @@ export function encerramentoRecusado(mensagem: string, status = 409) {
     HttpResponse.json({ statusCode: status, message: mensagem, error: 'Conflict' }, { status }),
   )
 }
+
+/* ---------------------------------------------------------------- rankings -- */
+
+/** Linha de ranking de equipe, com os campos que a posição já ordena. */
+export function linhaDeGrupo(
+  parcial: Partial<ItemDeGrupo> & Pick<ItemDeGrupo, 'posicao' | 'nome' | 'grupoId'>,
+): ItemDeGrupo {
+  return { valor: 0, empate: false, ...parcial }
+}
+
+/** Linha do ranking individual. */
+export function linhaDeAluno(
+  parcial: Partial<ItemDeAluno> & Pick<ItemDeAluno, 'posicao' | 'nome' | 'alunoId'>,
+): ItemDeAluno {
+  return { valor: 0, empate: false, ...parcial }
+}
+
+/**
+ * Envelope de um ranking de equipe (parcial ou anual), com o `completo`
+ * derivado de `bimestresEncerrados` — e não passado à mão.
+ *
+ * A API mantém os dois coerentes (é `completo === (bimestresEncerrados === 4)`),
+ * e deixar a fábrica montar a coerência evita o teste que "prova" o aviso de
+ * parcialidade com um cenário impossível.
+ */
+export function rankingDeGrupo(
+  parcial: Partial<RespostaDeRanking> & Pick<RespostaDeRanking, 'competicaoId'>,
+): RespostaDeRanking {
+  const bimestresEncerrados = parcial.bimestresEncerrados ?? TOTAL_DE_BIMESTRES
+
+  return {
+    tipo: TIPO_RANKING.ANUAL,
+    bimestreId: null,
+    itens: [],
+    ...parcial,
+    bimestresEncerrados,
+    completo: parcial.completo ?? bimestresEncerrados === TOTAL_DE_BIMESTRES,
+  }
+}
+
+/** Envelope do ranking individual, que é anual e por isso ignora `bimestreId`. */
+export function rankingIndividual(
+  parcial: Partial<RespostaDoRankingIndividual> &
+    Pick<RespostaDoRankingIndividual, 'competicaoId'>,
+): RespostaDoRankingIndividual {
+  const bimestresEncerrados = parcial.bimestresEncerrados ?? TOTAL_DE_BIMESTRES
+
+  return {
+    tipo: TIPO_RANKING.INDIVIDUAL,
+    itens: [],
+    ...parcial,
+    bimestresEncerrados,
+    completo: parcial.completo ?? bimestresEncerrados === TOTAL_DE_BIMESTRES,
+  }
+}
+
+/**
+ * Os rankings de equipe de uma competição: a mesma rota responde o parcial ou o
+ * anual conforme o `bimestreId`, então um handler só decide qual dos dois volta.
+ *
+ * `GET /competicoes/:id/ranking` sem `bimestreId` é o anual; com, é o parcial do
+ * bimestre. Repetir a regra aqui é o que permite o teste trocar de visão e ver a
+ * tabela certa, sem dois handlers disputando a mesma rota.
+ */
+export function rankingsDaCompeticao(opcoes: {
+  anual?: RespostaDeRanking
+  parcial?: RespostaDeRanking
+}) {
+  return http.get(`${API}/competicoes/:id/ranking`, ({ request }) => {
+    const bimestreId = new URL(request.url).searchParams.get('bimestreId')
+    const resposta = bimestreId ? opcoes.parcial : opcoes.anual
+
+    return resposta
+      ? HttpResponse.json(resposta)
+      : HttpResponse.json(erroDaApi(404, 'Ranking não encontrado.'), { status: 404 })
+  })
+}
+
+/** O ranking individual da competição. */
+export function rankingIndividualDaCompeticao(resposta: RespostaDoRankingIndividual) {
+  return http.get(`${API}/competicoes/:id/ranking-individual`, () => HttpResponse.json(resposta))
+}
+
+/**
+ * Recusa de escopo nos dois endpoints de ranking: a API responde `403` quando
+ * quem pede o ranking é o aluno ou quando a competição não é da sala dele.
+ *
+ * É a resposta que o critério de aceite da Etapa 08 manda tratar sem quebrar a
+ * página, e por isso o corpo é o "Forbidden" cru do NestJS: se a tela mostrar a
+ * mensagem amigável, é porque a tradução aconteceu.
+ */
+export function rankingsRecusados() {
+  const forbidden = { statusCode: 403, message: 'Forbidden', error: 'Forbidden' }
+
+  return [
+    http.get(`${API}/competicoes/:id/ranking`, () =>
+      HttpResponse.json(forbidden, { status: 403 }),
+    ),
+    http.get(`${API}/competicoes/:id/ranking-individual`, () =>
+      HttpResponse.json(forbidden, { status: 403 }),
+    ),
+  ]
+}
+
 

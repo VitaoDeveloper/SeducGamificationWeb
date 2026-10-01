@@ -8,7 +8,8 @@ import { API, SENHA_DE_TESTE, TOKEN_DE_TESTE, loginAceito, loginRecusado } from 
 import { server } from '../../test/server'
 import { renderComSessao } from '../../test/render'
 import { TIPO_USUARIO } from '../../lib/sessao'
-import { ROTA_EM_BREVE, ROTA_LOGIN, ROTA_SALAS } from './rotas'
+import { ROTA_ALUNO } from '../aluno/rotas'
+import { ROTA_LOGIN, ROTA_SALAS } from './rotas'
 import { LoginPage } from './LoginPage'
 
 /*
@@ -21,7 +22,7 @@ function renderizarLogin() {
     <Routes>
       <Route path={ROTA_LOGIN} element={<LoginPage />} />
       <Route path={ROTA_SALAS} element={<p>tela das salas</p>} />
-      <Route path={ROTA_EM_BREVE} element={<p>tela do aluno</p>} />
+      <Route path={ROTA_ALUNO} element={<p>tela do aluno</p>} />
     </Routes>,
     ROTA_LOGIN,
   )
@@ -59,7 +60,7 @@ describe('LoginPage', () => {
     expect(await screen.findByText('tela das salas')).toBeInTheDocument()
   })
 
-  it('leva o aluno para a área em construção, e não para /salas', async () => {
+  it('leva o aluno para a área do aluno, e não para /salas', async () => {
     server.use(...loginAceito({ tipo: TIPO_USUARIO.ALUNO, id: 'aluno-3' }))
     const pessoa = userEvent.setup()
     renderizarLogin()

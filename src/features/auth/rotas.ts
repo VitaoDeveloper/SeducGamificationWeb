@@ -1,5 +1,6 @@
 import { TIPO_USUARIO } from '../../lib/sessao'
 import type { TipoUsuario } from '../../lib/sessao'
+import { ROTA_ALUNO } from '../aluno/rotas'
 
 /**
  * Rotas de autenticação, em um arquivo só.
@@ -14,18 +15,19 @@ export const ROTA_LOGIN = '/login'
 export const ROTA_SALAS = '/salas'
 export const ROTA_CONTA_SENHA = '/conta/senha'
 
-/** Área do aluno, ainda inexistente: só uma tela de aviso até a Etapa 08. */
-export const ROTA_EM_BREVE = '/em-breve'
-
 /**
  * Para onde cada perfil vai depois de entrar.
  *
  * O tipo vem do token, não do que a pessoa digitou: professor e aluno entram
  * pela mesma tela, com o mesmo código de matrícula no padrão `26XXX`, e só a
  * API sabe qual dos dois é.
+ *
+ * A rota do aluno vem de `features/aluno/rotas`, importada direto do arquivo
+ * folha e não do índice da feature: o índice carrega a página do aluno, que
+ * depende deste módulo, e a importação viraria um ciclo.
  */
 export function rotaInicial(tipo: TipoUsuario): string {
-  return tipo === TIPO_USUARIO.PROFESSOR ? ROTA_SALAS : ROTA_EM_BREVE
+  return tipo === TIPO_USUARIO.PROFESSOR ? ROTA_SALAS : ROTA_ALUNO
 }
 
 /**
