@@ -27,14 +27,13 @@ Um arquivo por etapa, para colar como prompt a um agente de código. Seguir a or
 | `10-etapa-relatorios.md` | 10 — Relatórios (JSON) | Os quatro relatórios em tela, com escopo por perfil |
 | `11-etapa-exportacao-pdf.md` | 11 — Relatórios (PDF) | Download dos quatro relatórios em PDF |
 
-## Bloqueios abertos (fora da sequência de etapas)
+## Bloqueios (fora da sequência de etapas)
 
-Diagnósticos com causa, evidência e proposta de correção, escritos para retomar do ponto
-onde pararam:
+Diagnósticos com causa, evidência e o que foi feito:
 
 | Arquivo | Assunto | Estado |
 |---|---|---|
-| `12-bloqueio-escolas-do-professor.md` | Formulário de nova sala não oferece as escolas vinculadas — trava o primeiro uso do sistema | **aberto**, depende de `GET /escolas` na API |
+| `12-bloqueio-escolas-do-professor.md` | Formulário de nova sala não oferecia as escolas vinculadas — travava o primeiro uso do sistema | **resolvido** com `GET /escolas` na API |
 
 ## Variáveis de ambiente
 

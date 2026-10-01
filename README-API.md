@@ -1,4 +1,4 @@
-# Seduc Gamification
+﻿# Seduc Gamification
 
 Sistema de **competições gamificadas** entre equipes de alunos, construído para apoiar uma pesquisa de mestrado sobre **motivação estudantil**. Ele substitui o trabalho manual feito em planilhas (Google Sheets e Excel) por uma API que permite ao professor **criar e monitorar competições** e ao aluno **visualizar resultados e emitir relatórios** — sem depender de conhecimento técnico.
 
@@ -390,7 +390,28 @@ curl -X POST http://localhost:3000/auth/trocar-senha \
 
 Responderá `200` sem corpo em caso de sucesso.
 
-### 11.2 Salas
+### 11.2 Escolas
+
+#### `GET /escolas` — lista as escolas vinculadas ao professor autenticado
+
+```bash
+curl http://localhost:3000/escolas \
+  -H "Authorization: Bearer <token>"
+```
+
+```json
+[
+  { "id": "...", "nome": "Escola Estadual de Exemplo" },
+  { "id": "...", "nome": "ETEC João Gomes de Araújo" }
+]
+```
+
+Exige o perfil **PROFESSOR** (`403` para aluno). A consulta sai da tabela
+`vinculos_professores`, e não de `salas`: é o vínculo que define o alcance do professor, e
+uma escola sem nenhuma sala precisa aparecer — é o que permite criar a primeira turma.
+Sem paginação: o universo é o número de vínculos do professor.
+
+### 11.3 Salas
 
 #### `POST /salas` — cria uma sala (professor vinculado à escola)
 
@@ -408,7 +429,7 @@ Validações: `nome` obrigatório, `anoLetivo` entre 2000 e 2100, `escolaId` UUI
 ]
 ```
 
-### 11.3 Lecionamentos (inscrição do professor na sala)
+### 11.4 Lecionamentos (inscrição do professor na sala)
 
 #### `POST /salas/{salaId}/inscricao`
 
@@ -424,7 +445,7 @@ Regras: professor precisa estar vinculado à escola; nomes são deduplicados; `4
 
 Lista os professores inscritos na sala com suas matérias.
 
-### 11.4 Alunos
+### 11.5 Alunos
 
 #### `POST /salas/{salaId}/alunos`
 
@@ -442,7 +463,7 @@ O código de matrícula é gerado automaticamente (padrão `26XXX`, sequencial p
 
 Lista os alunos da sala (id, nome, código de matrícula) em ordem alfabética.
 
-### 11.5 Competições
+### 11.6 Competições
 
 #### `POST /competicoes`
 
@@ -467,7 +488,7 @@ Validações: quatro bimestres, números 1 a 4 sem repetição, `dataFim > dataI
 
 #### `GET /lecionamentos/{lecionamentoId}/competicoes` — competições do lecionamento
 
-### 11.6 Grupos
+### 11.7 Grupos
 
 #### `POST /competicoes/{id}/grupos` — cria uma equipe
 
@@ -491,7 +512,7 @@ Remove o aluno do grupo no bimestre (parâmetro obrigatório; bimestre deve esta
 
 Lista os grupos com membros. Se `bimestreId` for omitido, usa o **último bimestre aberto** da competição.
 
-### 11.7 Componentes de pontuação e pesos
+### 11.8 Componentes de pontuação e pesos
 
 #### `POST /bimestres/{id}/componentes-pontuacao`
 
@@ -515,7 +536,7 @@ Retorna as matérias com a soma de pesos e `todasFechadas` (100% por matéria em
 { "fechado": false, "materiasPendentes": [ { "componenteCurricularId": "...", "materiaNome": "Interfaces", "somaPesoPercentual": 70, "faltaParaFechar": 30 } ] }
 ```
 
-### 11.8 Lançamentos de notas
+### 11.9 Lançamentos de notas
 
 #### `POST /componentes-pontuacao/{id}/lancamentos`
 
@@ -547,7 +568,7 @@ Grava em uma única transação.
 
 Lista os lançamentos do componente com os dados do aluno.
 
-### 11.9 Encerramento do bimestre
+### 11.10 Encerramento do bimestre
 
 #### `POST /bimestres/{id}/encerrar`
 
@@ -576,7 +597,7 @@ Exemplo resumido da resposta:
 }
 ```
 
-### 11.10 Rankings
+### 11.11 Rankings
 
 #### `GET /competicoes/{id}/ranking?bimestreId=<uuid>`
 
@@ -603,7 +624,7 @@ Desempates já gravados (manual ou automático) substituem a posição simples e
 
 Ranking individual anual (média das sínteses bimestrais de cada aluno).
 
-### 11.11 Desempate
+### 11.12 Desempate
 
 #### `GET /competicoes/{id}/desempate/pendencias`
 
@@ -626,7 +647,7 @@ Validações: a ordem deve formar **exatamente** um empate detectado no ranking;
 
 Dispara o critério **automático**: compara os grupos empatados matéria por matéria, da maior para a menor soma de pesos; vence quem tem maior média dos integrantes. Origem `AUTOMATICO`. Empates residuais (iguais em tudo) são devolvidos em `residuais` e nada é gravado. No alpha, o disparo é manual — não há job agendado.
 
-### 11.12 Relatórios (JSON e PDF)
+### 11.13 Relatórios (JSON e PDF)
 
 Todas as rotas aceitam professor (qualquer aluno/grupo da competição) e aluno (apenas o próprio/do próprio grupo).
 

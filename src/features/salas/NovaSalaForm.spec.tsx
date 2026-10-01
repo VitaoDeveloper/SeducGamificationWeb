@@ -115,12 +115,17 @@ describe('NovaSalaForm', () => {
     expect(onCriada).not.toHaveBeenCalled()
   })
 
-  it('bloqueia a criação e explica quando não há nenhuma escola', () => {
+  it('bloqueia a criação e explica quando o professor não tem escola vinculada', () => {
     renderComSessao(
       <NovaSalaForm escolas={[]} onCriada={vi.fn()} onCancelar={vi.fn()} />,
     )
 
-    expect(screen.getByText(/nenhuma escola aparece para você ainda/i)).toBeInTheDocument()
+    /*
+     * Lista vazia aqui significa uma coisa só: a API respondeu `GET /escolas` sem
+     * nenhuma. Como o `POST /salas` exige `escolaId` e valida o vínculo, não há
+     * envio possível — e o aviso aponta o mantenedor, que é quem faz o vínculo.
+     */
+    expect(screen.getByText(/nenhuma escola está vinculada ao seu usuário/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /criar sala/i })).toBeDisabled()
   })
 })

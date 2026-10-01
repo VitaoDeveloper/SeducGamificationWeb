@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useAuth } from '../auth'
 import { useRequisicao } from '../../lib/useRequisicao'
-import { listarAlunos, listarLecionamentos, listarSalas } from './salas.api'
-import type { Aluno, GrupoDeSalas, Lecionamento, Sala } from './salas.tipos'
+import { listarAlunos, listarEscolas, listarLecionamentos, listarSalas } from './salas.api'
+import type { Aluno, EscolaResumo, GrupoDeSalas, Lecionamento, Sala } from './salas.tipos'
 
 /**
  * Sala com a resposta à única pergunta que a listagem faz: o professor já
@@ -42,6 +42,20 @@ export function useSalasDoProfessor() {
         lecionamentos[indice]?.find((lecionamento) => lecionamento.professorId === meuId) ?? null,
     }))
   }, 'salas', { erroPadrao: 'Não foi possível carregar as salas.' })
+}
+
+/**
+ * Escolas vinculadas ao professor, para o formulário de nova sala.
+ *
+ * É a lista que a API devolve a partir da tabela de vínculos, e não uma
+ * dedução sobre as salas: uma escola sem nenhuma turma não aparece em
+ * `GET /salas`, e era por isso que um professor sem salas ficava sem nenhuma
+ * opção para escolher e sem conseguir criar a primeira.
+ */
+export function useEscolasVinculadas() {
+  return useRequisicao<EscolaResumo[]>(listarEscolas, 'escolas', {
+    erroPadrao: 'Não foi possível carregar as escolas vinculadas.',
+  })
 }
 
 /**

@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Badge, Button, Card, PageHeader, Spinner, Table, useToast } from '../../components'
 import type { TableColumn } from '../../components'
 import { NovaSalaForm } from './NovaSalaForm'
 import { rotaDaSala } from './rotas'
-import { useSalasAgrupadasPorEscola } from './salas.hooks'
+import { useEscolasVinculadas, useSalasAgrupadasPorEscola } from './salas.hooks'
 import type { SalaDoProfessor } from './salas.hooks'
 import type { Sala } from './salas.tipos'
 
@@ -20,20 +20,27 @@ import type { Sala } from './salas.tipos'
  */
 export function SalasListPage() {
   const { carregando, erro, recarregar, grupos } = useSalasAgrupadasPorEscola()
+  /*
+   * As escolas do formulário vêm da API (`GET /escolas`), não das salas: a
+   * escola é escolhida antes de existir qualquer turma naquela escola, e uma
+   * dedução sobre `grupos` não teria como oferecer a primeira.
+   */
+  const escolasVinculadas = useEscolasVinculadas()
   const [criando, setCriando] = useState(false)
   const toast = useToast()
 
+  // Uma falha em qualquer das duas leituras derruba a tela: sem as escolas o
+  // formulário não abre, e sem as salas a página é a própria lista.
+  const falha = erro ?? escolasVinculadas.erro
+
   /*
-   * As escolas oferecidas no formulário saem das salas que já vieram na
-   * listagem. Não há endpoint de escolas vinculadas ao professor: o vínculo é
-   * feito pelo mantenedor, direto no banco, e `GET /salas` é a única resposta
-   * que traz `escola` com nome.
+   * Só é "sem escolas" depois que a resposta chegou. Enquanto `GET /escolas` está
+   * em voo — ou falhou, e o alerta acima manda tentar de novo — abrir o
+   * formulário mostraria "Nenhuma escola está vinculada ao seu usuário", que é a
+   * mensagem mentirosa que causou este bug: o vínculo existe, a lista é que ainda
+   * não chegou. Por isso o formulário só abre com a resposta em mãos.
    */
-  const escolas = useMemo(() => {
-    const vistas = new Map<string, { id: string; nome: string }>()
-    for (const grupo of grupos) vistas.set(grupo.escola.id, grupo.escola)
-    return [...vistas.values()]
-  }, [grupos])
+  const escolasCarregadas = !escolasVinculadas.carregando && !escolasVinculadas.erro
 
   function aoCriarSala(sala: Sala) {
     setCriando(false)
@@ -58,18 +65,32 @@ export function SalasListPage() {
 
       <div className="mt-6 space-y-8">
         {criando ? (
-          <NovaSalaForm
-            escolas={escolas}
-            onCriada={aoCriarSala}
-            onCancelar={() => setCriando(false)}
-          />
+          escolasCarregadas ? (
+            <NovaSalaForm
+              escolas={escolasVinculadas.dados ?? []}
+              onCriada={aoCriarSala}
+              onCancelar={() => setCriando(false)}
+            />
+          ) : (
+            <div className="flex items-center justify-center gap-2.5 py-16">
+              <Spinner label="Carregando escolas vinculadas" />
+              <span className="text-neutral-500 text-sm">Carregando escolas vinculadas…</span>
+            </div>
+          )
         ) : null}
 
-        {erro ? (
+        {falha ? (
           <Alert tone="erro">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span>{erro}</span>
-              <Button variant="outline" size="sm" onClick={recarregar}>
+              <span>{falha}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  recarregar()
+                  escolasVinculadas.recarregar()
+                }}
+              >
                 Tentar de novo
               </Button>
             </div>
@@ -83,7 +104,7 @@ export function SalasListPage() {
           </div>
         ) : null}
 
-        {!carregando && !erro && grupos.length === 0 ? (
+        {!carregando && !falha && grupos.length === 0 ? (
           <Card tone="neutral" className="max-w-2xl">
             <h2 className="text-lg font-semibold">Nenhuma sala por aqui</h2>
             <p className="text-neutral-600 mt-1.5 text-sm">

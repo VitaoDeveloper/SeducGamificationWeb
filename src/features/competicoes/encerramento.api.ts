@@ -14,7 +14,7 @@ import type { MateriaPendente } from './componentes-pontuacao.tipos'
 
 /**
  * A transação do encerramento tem 30 s de orçamento na API (`README-API.md`,
- * seção 11.9): ela refaz as sínteses de todos os alunos por todas as matérias
+ * seção 11.10): ela refaz as sínteses de todos os alunos por todas as matérias
  * e grava tudo em um único commit. O `timeout` global do axios é de 15 s, o que
  * cortaria pela metade a janela que o servidor se deu — e cortar um encerramento
  * não é como cortar uma listagem: aqui o professor ficaria sem saber se a

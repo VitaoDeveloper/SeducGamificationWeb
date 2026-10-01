@@ -1,5 +1,5 @@
 import { api } from '../../lib/api'
-import type { Aluno, Lecionamento, NovaSala, NovoAluno, Sala } from './salas.tipos'
+import type { Aluno, EscolaResumo, Lecionamento, NovaSala, NovoAluno, Sala } from './salas.tipos'
 
 /**
  * Chamadas de sala, lecionamento e aluno.
@@ -12,6 +12,19 @@ import type { Aluno, Lecionamento, NovaSala, NovoAluno, Sala } from './salas.tip
 /** Salas de todas as escolas em que o professor está vinculado. */
 export async function listarSalas(): Promise<Sala[]> {
   const { data } = await api.get<Sala[]>('/salas')
+  return data
+}
+
+/**
+ * Escolas às quais o professor está vinculado, com nome.
+ *
+ * Sai da tabela de vínculos da API, e não de `GET /salas`: é o vínculo que
+ * define o alcance do professor, e deduzir as escolas a partir das salas
+ * escondia as escolas sem nenhuma turma — que são exatamente as que o professor
+ * precisa escolher para criar a primeira.
+ */
+export async function listarEscolas(): Promise<EscolaResumo[]> {
+  const { data } = await api.get<EscolaResumo[]>('/escolas')
   return data
 }
 

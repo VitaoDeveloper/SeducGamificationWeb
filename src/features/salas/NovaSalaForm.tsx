@@ -38,11 +38,11 @@ const ANO_MAXIMO = 2100
  * campo a mais para o professor atravessar. Ainda assim a escola entra no
  * corpo enviado, porque é ela que a API exige.
  *
- * A lista de escolas vem das salas que o professor já tem: a API não expõe as
- * escolas vinculadas a um professor (o vínculo é feito pelo mantenedor, direto
- * no banco), e `GET /salas` traz a escola de cada sala. Um professor sem
- * nenhuma sala não tem como escolher escola aqui — e a tela diz isso em vez de
- * oferecer um select vazio.
+ * A lista vem de `GET /escolas`, que devolve exatamente as escolas às quais o
+ * professor está vinculado. Lista vazia aqui quer dizer uma coisa só — não há
+ * vínculo nenhum — e o aviso diz isso, porque é a única situação em que a
+ * criação é impossível mesmo: sem escola, o `POST /salas` não tem o que
+ * mandar.
  */
 export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProps) {
   const [nome, setNome] = useState('')
@@ -107,9 +107,9 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
 
         {semEscolas ? (
           <Alert tone="info">
-            Nenhuma escola aparece para você ainda. O vínculo entre professor e
-            escola é feito pelo mantenedor, direto no banco de dados — sem ele a
-            API recusa a criação da sala.
+            Nenhuma escola está vinculada ao seu usuário. O vínculo entre
+            professor e escola é feito pelo mantenedor, direto no banco de
+            dados — sem ele a API recusa a criação da sala.
           </Alert>
         ) : null}
 

@@ -46,9 +46,10 @@ import type {
  * `server.use(...)`, e o `resetHandlers` de `src/test/setup.ts` desfaz tudo
  * depois.
  *
- * Os de sala estão no fim do arquivo pelo mesmo motivo, e porque as respostas
- * de `GET /salas` e `GET /salas/:id/lecionamentos` andam sempre juntas: a
- * listagem junta as duas para saber onde o professor leciona.
+ * Os de sala estão no fim do arquivo pelo mesmo motivo, e porque as respostas de
+ * `GET /salas`, `GET /salas/:id/lecionamentos` e `GET /escolas` andam sempre juntas: a
+ * listagem pede as três na mesma montagem — as salas e os lecionamentos para montar a
+ * tabela, as escolas para o formulário de nova sala.
  */
 
 export const API = import.meta.env.VITE_API_BASE_URL?.trim() || 'http://localhost:3000'
@@ -164,14 +165,53 @@ export function aluno(parcial: Partial<Aluno> & Pick<Aluno, 'id' | 'nome' | 'cod
 }
 
 /**
- * Salas do professor, com os lecionamentos de cada uma.
+ * Salas do professor, com os lecionamentos de cada uma e as escolas vinculadas.
  *
- * As duas respostas saem juntas porque a tela as pede juntas: a listagem precisa
- * saber, para cada sala, se o professor leciona nela, e quem responde isso é o
- * endpoint de lecionamentos. Deixar as duas de fora do mesmo conjunto faria o
- * `onUnhandledRequest: 'error'` do msw acusar a tela inteira.
+ * As três respostas saem juntas porque a tela as pede juntas: a listagem precisa
+ * saber, para cada sala, se o professor leciona nela, e o formulário de nova sala
+ * precisa das escolas para onde ele pode criar a primeira. Deixar alguma de fora do
+ * mesmo conjunto faria o `onUnhandledRequest: 'error'` do msw acusar a tela inteira.
  */
 export function salasDoProfessor(
+  salas: Sala[],
+  lecionamentosPorSala: Record<string, Lecionamento[]> = {},
+  escolas: EscolaResumo[] = [ESCOLA_A],
+) {
+  return [
+    http.get(`${API}/salas`, () => HttpResponse.json(salas)),
+    http.get(`${API}/salas/:salaId/lecionamentos`, ({ params }) =>
+      HttpResponse.json(lecionamentosPorSala[String(params.salaId)] ?? []),
+    ),
+    escolasVinculadas(escolas),
+  ]
+}
+
+/**
+ * Escolas vinculadas ao professor, como `GET /escolas` devolve.
+ *
+ * O padrão é o cenário mais comum — vinculado na escola em que estão as salas do
+ * teste — para o teste não ter que repetir o que não está variando. Passar `[]`
+ * monta o caso de professor sem nenhum vínculo, que é o único em que o formulário
+ * de nova sala se recusa a enviar.
+ */
+export function escolasVinculadas(escolas: EscolaResumo[] = [ESCOLA_A]) {
+  return http.get(`${API}/escolas`, () => HttpResponse.json(escolas))
+}
+
+/** Nenhuma sala, com as escolas vinculadas: o professor ainda não criou a primeira. */
+export function semSalas(escolas: EscolaResumo[] = [ESCOLA_A]) {
+  return salasDoProfessor([], {}, escolas)
+}
+
+/**
+ * Salas e lecionamentos, sem o handler de escolas.
+ *
+ * Para os testes que precisam tratar o `GET /escolas` por conta própria — atrasá-lo
+ * ou colocá-lo em erro. Como o msw resolve pela primeira rota que casa, o handler
+ * padrão da fábrica venceria o do teste, e a tela não mostraria nem o carregamento
+ * nem a falha que ele quer verificar.
+ */
+export function salasSemHandlerDeEscolas(
   salas: Sala[],
   lecionamentosPorSala: Record<string, Lecionamento[]> = {},
 ) {
@@ -181,11 +221,6 @@ export function salasDoProfessor(
       HttpResponse.json(lecionamentosPorSala[String(params.salaId)] ?? []),
     ),
   ]
-}
-
-/** Nenhuma sala: a resposta vazia do `GET /salas` mais os lecionamentos em branco. */
-export function semSalas() {
-  return salasDoProfessor([])
 }
 
 /* ------------------------------------------------------------ competições -- */
@@ -459,7 +494,7 @@ export function lancamentosDoComponente(notas: Lancamento[], alunos: Aluno[] = [
 /**
  * Resposta de `POST /bimestres/:id/encerrar`, com a situação já em ENCERRADO.
  *
- * Fica no formato do exemplo do `README-API.md` (seção 11.9), que é o resumo
+ * Fica no formato do exemplo do `README-API.md` (seção 11.10), que é o resumo
  * fiel do que a API devolve: totais, as duas listas de síntese, os empates e o
  * aviso de fim de competição. O que o teste não quiser que apareça, deixa
  * vazio/null — daí os `parcial` com padrão.

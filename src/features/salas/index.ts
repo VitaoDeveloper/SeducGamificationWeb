@@ -21,7 +21,7 @@ export {
 } from './rotas'
 export { SalaDetailPage } from './SalaDetailPage'
 export { SalasListPage } from './SalasListPage'
-export { useAlunos, useLecionamentos, useSala, useSalasAgrupadasPorEscola, useSalasDoProfessor } from './salas.hooks'
+export { useAlunos, useEscolasVinculadas, useLecionamentos, useSala, useSalasAgrupadasPorEscola, useSalasDoProfessor } from './salas.hooks'
 export type { SalaDoProfessor } from './salas.hooks'
 export type {
   Aluno,
