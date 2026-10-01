@@ -27,6 +27,15 @@ Um arquivo por etapa, para colar como prompt a um agente de código. Seguir a or
 | `10-etapa-relatorios.md` | 10 — Relatórios (JSON) | Os quatro relatórios em tela, com escopo por perfil |
 | `11-etapa-exportacao-pdf.md` | 11 — Relatórios (PDF) | Download dos quatro relatórios em PDF |
 
+## Bloqueios abertos (fora da sequência de etapas)
+
+Diagnósticos com causa, evidência e proposta de correção, escritos para retomar do ponto
+onde pararam:
+
+| Arquivo | Assunto | Estado |
+|---|---|---|
+| `12-bloqueio-escolas-do-professor.md` | Formulário de nova sala não oferece as escolas vinculadas — trava o primeiro uso do sistema | **aberto**, depende de `GET /escolas` na API |
+
 ## Variáveis de ambiente
 
 Criar `.env.example` no front com `VITE_API_BASE_URL` (ex.: `http://localhost:3000`).

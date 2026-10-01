@@ -89,7 +89,16 @@ componentes curriculares que ele leciona ali, e é o que dá origem à competiç
 gerado (`26XXX`); o modal de confirmação é a única vez que esse código aparece
 junto com a explicação, então ele fica em destaque e com botão de copiar.
 
-### Limites da API que moldam a tela
+### Bloqueios abertos
+
+Diagnósticos escritos para retomar depois, com causa, evidência verificada na API em
+deploy e a correção proposta:
+
+| Documento | Assunto |
+| --- | --- |
+| [`docs/12-bloqueio-escolas-do-professor.md`](docs/12-bloqueio-escolas-do-professor.md) | Nova sala não oferece as escolas vinculadas — professor com vínculo e sem salas não consegue criar a primeira. Depende de `GET /escolas` na API |
+
+## Limites da API que moldam a tela
 
 Estas lacunas foram confirmadas na API e explicam decisões de interface que, sem
 a nota, pareceriam bugs:
@@ -98,6 +107,13 @@ a nota, pareceriam bugs:
   oferecidas no formulário de nova sala são deduplicadas de `GET /salas`; um
   professor sem nenhuma sala não tem de onde escolher escola, e o formulário
   diz isso em vez de mostrar um select vazio.
+
+  > **Isto é um bloqueio aberto, não uma nota derodapé.** Um professor com
+  > vínculo e **sem nenhuma sala** fica impedido de criar a primeira — o
+  > `GET /salas` volta vazio, a lista de escolas fica vazia, e o botão de criar
+  > é desabilitado. Diagnóstico, evidência e proposta de correção em
+  > [`docs/12-bloqueio-escolas-do-professor.md`](docs/12-bloqueio-escolas-do-professor.md).
+  > A saída é `GET /escolas` na API.
 - **Não existe `GET /salas/:id`.** O detalhe procura a sala em `GET /salas`,
   que o professor acabou de carregar e é pequena.
 - **`GET /salas` não diz quem está inscrito.** Cada sala custa uma chamada extra
