@@ -13,9 +13,12 @@ cp .env.example .env   # ajuste VITE_API_BASE_URL
 pnpm dev
 ```
 
-> O `.env` precisa apontar para uma API que responda. O `seduc-gamification.vercel.app`
-> hoje é um deploy de preenchimento: responde `Hello World!` em `/` e 500 em
-> `/auth/login`. Para desenvolver contra a API local, use
+> O `.env` precisa apontar para uma API que responda. O
+> `seduc-gamification.vercel.app` está no ar e atende às rotas normalmente —
+> `POST /auth/login` devolve `401` para credenciais inválidas e `GET /escolas`
+> devolve `401` sem token, que é o comportamento esperado das duas. A raiz `/`
+> responde `Hello World!`, porque é o padrão do Nest e não indica nada sobre a
+> saúde da API; para desenvolver contra a API local, use
 > `VITE_API_BASE_URL=http://localhost:3000`.
 
 | Script            | O que faz                                       |
