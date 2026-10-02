@@ -201,8 +201,19 @@ export interface RelatorioComparativoDoGrupo extends Omit<RelatorioDoGrupo, 'tip
   comparativo: GrupoComparativo[]
 }
 
-/** Qual dos quatro relatórios uma resposta é, para as telas decidirem o que falta. */
-export type TipoDeRelatorio = RelatorioIndividual['tipo'] | RelatorioDoGrupo['tipo']
+/**
+ * Qual dos quatro relatórios uma resposta é, para as telas decidirem o que falta.
+ *
+ * São os quatro `tipo`, e não só os dois envelopes "de base": os comparativos
+ * têm `tipo` próprio (`comparativo-grupo`, `comparativo-grupos`), e deixar fora
+ * os dois faria um `Record` indexado por eles — o mapa de rota do PDF, por
+ * exemplo — recusar duas das quatro telas em tempo de compilação.
+ */
+export type TipoDeRelatorio =
+  | RelatorioIndividual['tipo']
+  | RelatorioComparativoDoAluno['tipo']
+  | RelatorioComparativoDoGrupo['tipo']
+  | RelatorioDoGrupo['tipo']
 
 /** Os quatro relatórios, na união que o `useRequisicao` devolve. */
 export type Relatorio =
