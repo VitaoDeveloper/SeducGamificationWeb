@@ -257,6 +257,18 @@ export function calcularPreviaDoBimestre({
   return {
     alunos: ordenados,
     grupos: grupos.map((grupo) => {
+      /*
+       * Somados na ordem que a API entregou, que é por nome do aluno. O
+       * encerramento soma `membrosGrupos` sem `orderBy`
+       * (`calcularSintesesDosGrupos`, no backend), então a ordem lá é a que o
+       * banco devolver: em tese a mesma, em prática não é garantida.
+       *
+       * Isso não é um bug do front — é uma instabilidade do backend, e a soma em
+       * ponto flutuante não é associativa, então uma média de grupo pode cair
+       * dos dois lados de um `.005` e diferir em um centésimo do valor gravado. A
+       * ordem aqui é a mais defensável (o nome do aluno não muda entre
+       * chamadas); o conserto de verdade é o backend declarar um `orderBy`.
+       */
       const integrantes = grupo.membrosGrupos
 
       return {
