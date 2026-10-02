@@ -156,6 +156,59 @@ describe('sinteseCalculo', () => {
         ),
       ).toBe(8.3)
     })
+
+    /*
+     * A ordem da soma não é detalhe de leitura. Notas 1, 1 e 5,25 com pesos
+     * 50/20/30 dão as mesmas parcelas em qualquer ordem, mas o empacotamento em
+     * ponto flutuante não é associativo e o resultado muda de centésimo:
+     *
+     *   por nome  (ordem em que a API entrega os componentes): 2,27
+     *   por peso  (ordem em que o encerramento soma):            2,28
+     *
+     * O encerramento pede `pesoPercentual desc, id asc` ao banco
+     * (`carregarComponentesDoBimestre`), e é ele quem grava a síntese. Somar na
+     * ordem da entrega faria a prévia mostrar 2,27 e o banco gravar 2,28 — no
+     * centésimo que separa dois grupos no ranking.
+     */
+    it('soma na ordem do encerramento (peso desc), não na ordem da entrega', () => {
+      expect(
+        sinteseDaMateria(
+          [
+            { valorNoModelo: '1', pesoPercentual: PESOS_50_20_30.prova },
+            { valorNoModelo: '1', pesoPercentual: PESOS_50_20_30.caderno },
+            { valorNoModelo: '5.25', pesoPercentual: PESOS_50_20_30.projeto },
+          ],
+          ESCALA_NUMERICA,
+        ),
+      ).toBe(2.28)
+    })
+
+    it('no empate de peso, desempata pelo id do componente, como o banco', () => {
+      // Três componentes com o mesmo peso: o desempate do `orderBy` do backend é
+      // `id asc`, e é ele que fixa o empacotamento da soma. Notas 0,25, 0,5 e
+      // 1,5 dão 0,68 nessa ordem e 0,67 invertida — mesmo peso, mesmo centésimo
+      // diferente. A ordem da entrada não pode decidir isso, e o nome do
+      // componente também não serve, porque o banco não ordena por nome.
+      const porId = sinteseDaMateria(
+        [
+          { valorNoModelo: '0.25', pesoPercentual: 30, componenteId: 'cp-a' },
+          { valorNoModelo: '0.5', pesoPercentual: 30, componenteId: 'cp-b' },
+          { valorNoModelo: '1.5', pesoPercentual: 30, componenteId: 'cp-c' },
+        ],
+        ESCALA_NUMERICA,
+      )
+      const invertido = sinteseDaMateria(
+        [
+          { valorNoModelo: '0.25', pesoPercentual: 30, componenteId: 'cp-c' },
+          { valorNoModelo: '0.5', pesoPercentual: 30, componenteId: 'cp-b' },
+          { valorNoModelo: '1.5', pesoPercentual: 30, componenteId: 'cp-a' },
+        ],
+        ESCALA_NUMERICA,
+      )
+
+      expect(porId).toBe(0.68)
+      expect(invertido).toBe(0.67)
+    })
   })
 
   describe('sinteseBimestralDoAluno', () => {

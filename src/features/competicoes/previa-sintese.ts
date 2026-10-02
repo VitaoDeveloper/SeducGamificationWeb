@@ -231,6 +231,7 @@ export function calcularPreviaDoBimestre({
         materia.componentesPontuacao.map((componente) => ({
           valorNoModelo: textos.get(componente.id)?.get(aluno.id),
           pesoPercentual: componente.pesoPercentual,
+          componenteId: componente.id,
         })),
         modelo,
       ),
@@ -318,6 +319,7 @@ export function sinteseDaMateriaPorAluno({
         componentes.map((componente) => ({
           valorNoModelo: textos.get(componente.id)?.get(aluno.id),
           pesoPercentual: componente.pesoPercentual,
+          componenteId: componente.id,
         })),
         modelo,
       ),

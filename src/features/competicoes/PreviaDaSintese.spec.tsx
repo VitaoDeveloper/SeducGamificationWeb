@@ -314,4 +314,28 @@ describe('PreviaDaSintese', () => {
     // não reprovação: a tabela continua no lugar, vazia de notas.
     expect(within(await linhaDoAluno('Ana')).getAllByText('0.00')).toHaveLength(2)
   })
+
+  it('distingue a falha de leitura de "bimestre sem componente"', async () => {
+    server.use(
+      http.get(`${API}/bimestres/:id/componentes-pontuacao`, () =>
+        HttpResponse.json({ statusCode: 500, message: 'Falha ao listar.' }, { status: 500 }),
+      ),
+    )
+
+    renderComSessao(
+      <PreviaDaSintese
+        bimestre={bimestreDoTeste()}
+        alunos={ALUNOS}
+        grupos={[]}
+        modelo={MODELO_NUMERICO}
+      />,
+    )
+
+    // A falha da API produz a mesma lista vazia de "bimestre sem componente", mas
+    // não é a mesma coisa: mandar o professor configurar pesos que já existem,
+    // sem mensagem de erro e sem nova tentativa, é a pior das duas leituras.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Falha ao listar.')
+    expect(screen.getByRole('button', { name: /tentar de novo/i })).toBeInTheDocument()
+    expect(screen.queryByText(/ainda não tem componente de pontuação/i)).not.toBeInTheDocument()
+  })
 })

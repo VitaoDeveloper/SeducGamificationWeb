@@ -63,6 +63,12 @@ export interface EscalaParaCalculo {
 export interface EntradaDaSintese {
   valorNoModelo?: string | null
   pesoPercentual: number
+  /**
+   * Id do componente de pontuação, usado só para desempatar a ordem da soma.
+   *
+   * Ver `sinteseDaMateria`: a ordem da soma altera o centésimo do resultado.
+   */
+  componenteId?: string
 }
 
 /**
@@ -105,14 +111,37 @@ export function converterNotaParaNumero(escala: EscalaParaCalculo, valorNoModelo
  * Componente sem lançamento entra como nota 0, sem sumir da lista: o peso dele
  * continua contando, que é o que o backend faz ao montar as entradas da
  * matéria.
+ *
+ * A soma percorre as entradas **na ordem do encerramento** — peso decrescente,
+ * id crescente — e isso não é cosmético. `nota × peso / 100` em ponto flutuante
+ * não é associativa: as mesma parcelas, somadas em ordens diferentes, podem dar
+ * resultados que caem em lados opostos de um `.005` no `toFixed(2)` final. A
+ * ordem é exatamente a dos empates de ranking que esta etapa existe para prever.
+ * O encerramento usa essa ordem porque `carregarComponentesDoBimestre` pede
+ * `orderBy: [{ pesoPercentual: 'desc' }, { id: 'asc' }]`, enquanto a API entrega
+ * os componentes para o front por nome — que é outra ordem. Sem esta
+ * ordenação, a prévia mostraria um número que o encerramento não gravaria.
  */
 export function sinteseDaMateria(
   entradas: readonly EntradaDaSintese[],
   escala: EscalaParaCalculo,
 ): number {
+  /*
+   * `toSorted` não serve aqui: o alvo é o runtime do navegador, e a cópia é
+   * para não mutar a lista que o chamador passou. `localeCompare` também não:
+   * o desempate do backend é collation de banco sobre id, e ids não têm
+   * acento — comparação simples devolve a mesma ordem.
+   */
+  const ordenadas = [...entradas].sort((a, b) => {
+    if (a.pesoPercentual !== b.pesoPercentual) return b.pesoPercentual - a.pesoPercentual
+    const idA = a.componenteId ?? ''
+    const idB = b.componenteId ?? ''
+    return idA < idB ? -1 : idA > idB ? 1 : 0
+  })
+
   let soma = 0
 
-  for (const entrada of entradas) {
+  for (const entrada of ordenadas) {
     const nota = entrada.valorNoModelo?.trim()
       ? converterNotaParaNumero(escala, entrada.valorNoModelo)
       : 0

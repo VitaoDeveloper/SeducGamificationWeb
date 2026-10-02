@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, Spinner, Table } from '../../components'
+import { Alert, Badge, Button, Card, Spinner, Table } from '../../components'
 import type { TableColumn } from '../../components'
 import { formatarSintese } from '../../lib/sinteseCalculo'
 import { useComponentesDoBimestre, useLancamentosDeComponentes } from './componentes-pontuacao.hooks'
@@ -83,6 +83,26 @@ export function PreviaDaSintese({ bimestre, alunos, grupos, modelo }: PreviaDaSi
   }
 
   const materias = componentes.dados?.materias ?? []
+
+  /*
+   * Falha e "não tem componente"-produzem a mesma `materias` vazia, mas não são a
+   * mesma coisa: a primeira é a API recusando a leitura, e a segunda é o professor
+   * que ainda não configurou os pesos. Sem esta distinção, uma falha virava
+   * instrução errada — "vá em Componentes, defina os pesos" — para quem não tinha
+   * nada a configurar, e sem botão de nova tentativa.
+   */
+  if (componentes.erro) {
+    return (
+      <Alert tone="erro">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span>{componentes.erro}</span>
+          <Button variant="outline" size="sm" onClick={componentes.recarregar}>
+            Tentar de novo
+          </Button>
+        </div>
+      </Alert>
+    )
+  }
 
   if (materias.length === 0) {
     return (
