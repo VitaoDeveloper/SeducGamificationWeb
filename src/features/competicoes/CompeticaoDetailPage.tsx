@@ -581,6 +581,7 @@ export function CompeticaoDetailPage() {
         aberto={desempateAberto !== null}
         competicaoId={dados.id}
         pendencia={desempateAberto}
+        pendenciasDoEscopo={pendenciasDeDesempate}
         bimestres={bimestres}
         revalidacao={desempatesGravados}
         onClose={() => setDesempateAberto(null)}

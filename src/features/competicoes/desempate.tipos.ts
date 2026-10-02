@@ -132,15 +132,15 @@ export interface EmpateResidual {
 /**
  * Resposta de `POST .../aplicar-automatico`.
  *
- * `aplicados` é quantos blocos foram gravados, e não quantas equipes: um empate
- * de três equipes grava três posições e conta como uma aplicação. A distinção
- * importa porque o professor precisa saber se o botão resolveu alguma coisa — e um
- * `desempates.length` grande demais deixaria a impressão de vários empates
- * resolvidos.
+ * `aplicados` é **0 ou 1**, e não uma contagem: a API devolve
+ * `desempates.length > 0 ? 1 : 0` (`desempate.service.ts`), porque o caminho
+ * automático resolve o escopo inteiro de uma vez. Quantas posições foram
+ * gravadas é `desempates.length`; o sinalizador aqui só diz se alguma coisa foi
+ * gravada.
  */
 export interface RespostaDoDesempateAutomatico {
   bimestreId: string | null
-  aplicados: number
+  aplicados: 0 | 1
   desempates: DesempateGravado[]
   residuais: EmpateResidual[]
 }

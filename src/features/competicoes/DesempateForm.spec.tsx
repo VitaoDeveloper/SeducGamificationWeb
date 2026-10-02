@@ -180,10 +180,18 @@ async function abrirAviso() {
   return within(await screen.findByRole('alert'))
 }
 
-/** Abre o diálogo pelo botão do aviso e devolve o modal. */
+/**
+ * Abre o diálogo pelo botão do aviso e devolve o modal.
+ *
+ * Com mais de uma pendência o aviso tem um botão por linha, então o `primeiro`
+ * é o do empate aberto — que é o que os testes desta etapa sempre quiseram.
+ */
 async function abrirDesempate(pessoa: ReturnType<typeof userEvent.setup>) {
   const aviso = await abrirAviso()
-  await pessoa.click(aviso.getByRole('button', { name: 'Resolver desempate' }))
+  const botoes = aviso.getAllByRole('button', { name: 'Resolver desempate' })
+  const [primeiro] = botoes
+  if (!primeiro) throw new Error('o aviso de desempate não tem botão para abrir')
+  await pessoa.click(primeiro)
 
   return screen.findByRole('dialog')
 }
@@ -477,6 +485,68 @@ describe('desempate', () => {
       within(modal).getByText(/As equipes terminaram empatadas em todas as matérias/),
     ).toBeInTheDocument()
     expect(within(modal).getByText(/Equipe Gama e Equipe Delta/)).toBeInTheDocument()
+  })
+
+  it('nomeia as equipes de todos os blocos que o automático gravou', async () => {
+    const pessoa = userEvent.setup()
+
+    /*
+     * Dois empates pendentes no mesmo bimestre, e o professor abre só um deles. O
+     * caminho automático não respeita a escolha: a API percorre a lista de
+     * empates do escopo inteiro e devolve as posições de todos os blocos numa
+     * chamada só. A confirmação precisa mostrar o nome das duas — das quatro
+     * equipes, e não só das duas do empate aberto.
+     */
+    const outraPendencia: PendenciaDeDesempate = pendenciaDeDesempate({
+      bimestreId: 'b1',
+      valor: 7.1,
+      grupos: [
+        { grupoId: 'g5', nome: 'Equipe Êpsilon', valor: 7.1 },
+        { grupoId: 'g6', nome: 'Equipe Zeta', valor: 7.1 },
+      ],
+    })
+
+    server.use(
+      ...cenario([PENDENCIA_PARCIAL, outraPendencia], [
+        http.post(`${API}/competicoes/:id/desempate/aplicar-automatico`, () =>
+          HttpResponse.json({
+            bimestreId: 'b1',
+            aplicados: 1,
+            desempates: [
+              { grupoId: 'g1', posicao: 3, origem: ORIGEM_DESEMPATE.AUTOMATICO },
+              { grupoId: 'g2', posicao: 4, origem: ORIGEM_DESEMPATE.AUTOMATICO },
+              { grupoId: 'g5', posicao: 6, origem: ORIGEM_DESEMPATE.AUTOMATICO },
+              { grupoId: 'g6', posicao: 7, origem: ORIGEM_DESEMPATE.AUTOMATICO },
+            ],
+            residuais: [],
+          }),
+        ),
+      ]),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+    const modal = await abrirDesempate(pessoa)
+
+    await pessoa.click(
+      within(modal).getByRole('button', { name: 'Aplicar critério automático agora' }),
+    )
+    await pessoa.click(
+      within(modal).getByRole('button', { name: 'Sim, aplicar o critério automático' }),
+    )
+
+    const gravados = await within(modal).findAllByRole('listitem')
+    expect(gravados.map((linha) => linha.textContent)).toEqual([
+      '3º — Equipe Alfa',
+      '4º — Equipe Beta',
+      '6º — Equipe Êpsilon',
+      '7º — Equipe Zeta',
+    ])
+
+    // E a contagem é de posições gravadas, não de empates: a mesma chamada
+    // gravou dois blocos, e o texto não pode chamar um deles de "vários empates".
+    expect(within(modal).getByText('O critério automático gravou 4 posições.')).toBeInTheDocument()
+    expect(within(modal).queryByText(/O critério automático resolveu este empate\./)).not.toBeInTheDocument()
   })
 
   it('mostra a recusa da API e mantém o desempate na tela', async () => {

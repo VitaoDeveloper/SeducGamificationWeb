@@ -37,6 +37,16 @@ export interface DesempateFormProps {
   competicaoId: string
   /** O empate a resolver; `null` quando não há desempate em aberto. */
   pendencia: PendenciaDeDesempate | null
+  /**
+   * Todas as pendências da competição, não só a que está aberta.
+   *
+   * O caminho automático grava **todos** os empates do escopo, não só o que o
+   * professor abriu: a API itera a lista inteira e devolve as posições de todos
+   * os blocos de uma vez. Sem as pendências do escopo, a confirmação não tem de
+   * onde tirar o nome das equipes que não estavam no empate aberto e cairia no
+   * `grupoId` — um id no lugar de um nome, que é a pior das confirmações.
+   */
+  pendenciasDoEscopo?: PendenciaDeDesempate[]
   /** Bimestres da competição, para nomear o escopo parcial. */
   bimestres: Bimestre[]
   /**
@@ -92,6 +102,7 @@ export function DesempateForm({
   aberto,
   competicaoId,
   pendencia,
+  pendenciasDoEscopo,
   bimestres,
   revalidacao = 0,
   onClose,
@@ -161,6 +172,20 @@ export function DesempateForm({
   const escopo = rotuloDoEscopoDoDesempate(alvo, bimestres)
   const posicoesAtuais = posicoesEmUso(posicoes, alvo, posicaoDoBloco)
   const ordemInvalida = posicaoRepetida(posicoesAtuais)
+
+  /*
+   * Os nomes da confirmação do automático.
+   *
+   * A API resolve o escopo inteiro, então as posições que ela devolve podem ser
+   * de blocos que não são o que o professor abriu. As pendências do mesmo escopo
+   * são a única fonte de nome dessas equipes: o `DesempateGravado` que a API
+   * devolve é o registro gravado (id e posição), não a linha do ranking.
+   */
+  const nomesDasEquipes = new Map(
+    [...(pendenciasDoEscopo ?? []), alvo]
+      .filter((item) => item.bimestreId === alvo.bimestreId)
+      .flatMap((item) => item.grupos.map((grupo) => [grupo.grupoId, grupo.nome] as const)),
+  )
 
   /*
    * Fechar é recusado enquanto a chamada está em voo: o diálogo existe para
@@ -286,7 +311,7 @@ export function DesempateForm({
       ) : null}
 
       {passo === 'resultado' && automatico ? (
-        <ResultadoDoAutomatico resposta={automatico} grupos={alvo.grupos} />
+        <ResultadoDoAutomatico resposta={automatico} nomesDasEquipes={nomesDasEquipes} />
       ) : null}
     </Modal>
   )
@@ -542,22 +567,21 @@ function ExplicacaoDoAutomatico() {
 /** O que o critério automático gravou, e o que ele não conseguiu decidir. */
 function ResultadoDoAutomatico({
   resposta,
-  grupos,
+  nomesDasEquipes,
 }: {
   resposta: RespostaDoDesempateAutomatico
-  grupos: GrupoEmpatado[]
+  /** `grupoId → nome`, montado com as pendências do escopo inteiro. */
+  nomesDasEquipes: ReadonlyMap<string, string>
 }) {
   const { aplicados, desempates, residuais } = resposta
 
   /*
    * A API devolve o id do grupo gravado e não o nome dele (o `DesempateGravado`
-   * é o registro, não a linha do ranking), então o nome vem do empate que está
-   * sendo resolvido. Sem esta busca, a confirmação do desempate automático
-   * mostraria uma lista de ids — que não é uma confirmação que o professor
-   * consiga ler.
+   * é o registro, não a linha do ranking), então o nome vem das pendências. O
+   * `?? grupoId` no fim é o caso em que a equipe nem estava na lista de
+   * pendências — nenhum nome conhecido, e o id é melhor do que a linha sumir.
    */
-  const nomeDe = (grupoId: string) =>
-    grupos.find((grupo) => grupo.grupoId === grupoId)?.nome ?? grupoId
+  const nomeDe = (grupoId: string) => nomesDasEquipes.get(grupoId) ?? grupoId
 
   if (aplicados === 0 && residuais.length === 0) {
     return (
@@ -575,9 +599,15 @@ function ResultadoDoAutomatico({
     <div className="space-y-4">
       <Alert tone={residuais.length > 0 ? 'info' : 'sucesso'}>
         <p className="font-medium">
-          {aplicados === 1
-            ? 'O critério automático resolveu este empate.'
-            : `O critério automático resolveu ${aplicados} empates.`}
+          {/*
+           * A API resolve o escopo inteiro, então o plural não é "vários
+           * empates resolvidos" e sim o número de posições gravadas — que é o
+           * que a lista abaixo mostra. Dizer "este empate" esconderia os demais
+           * blocos que a mesma chamada gravou.
+           */}
+          {desempates.length === 1
+            ? 'O critério automático gravou esta posição.'
+            : `O critério automático gravou ${desempates.length} posições.`}
         </p>
         <p className="mt-1">Posições gravadas pela API:</p>
         <ul className="mt-1.5 list-inside list-disc">
