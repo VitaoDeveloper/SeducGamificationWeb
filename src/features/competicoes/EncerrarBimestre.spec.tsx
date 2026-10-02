@@ -408,7 +408,12 @@ describe('Encerramento de bimestre', () => {
           sinteseAluno: [sinteseDoAluno('b4', ANA, 8.4)],
           sinteseGrupo: [sinteseDoGrupo('b4', 'g1', 'Equipe Alfa', 8.4)],
           competicaoConcluida: true,
-          pontuacoesFinais: [{ grupoId: 'g1', nome: 'Equipe Alfa', valor: 33.1 }],
+          // Dois arrays dentro de um objeto, como a API devolve — o teste antigo punha
+// um array solto e fixava o formato errado no tipo.
+          pontuacoesFinais: {
+            alunos: [{ alunoId: ANA.id, nome: ANA.nome, valor: 33.1 }],
+            grupos: [{ grupoId: 'g1', nome: 'Equipe Alfa', valor: 33.1 }],
+          },
         }),
         bimestres,
       ),

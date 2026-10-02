@@ -3,6 +3,7 @@ import type {
   ComponentePontuacao,
   ComponentesDoBimestre,
   Lancamento,
+  LancamentoCriado,
   LancarNota,
   LoteDeLancamentos,
   NovoComponentePontuacao,
@@ -68,8 +69,11 @@ export async function lancarNota(
   componentePontuacaoId: string,
   alunoId: string,
   valorNoModelo: string,
-): Promise<Lancamento> {
-  const { data } = await api.post<Lancamento>(
+): Promise<LancamentoCriado> {
+  // `LancamentoCriado`, não `Lancamento`: a API responde a entidade criada, sem
+  // o aluno embutido. A tela recarrega a lista depois de gravar, então nunca usa
+  // o retorno.
+  const { data } = await api.post<LancamentoCriado>(
     `/componentes-pontuacao/${componentePontuacaoId}/lancamentos`,
     { alunoId, valorNoModelo },
   )
@@ -98,9 +102,10 @@ export async function listarLancamentos(componentePontuacaoId: string): Promise<
 export async function lancarNotasEmLote(
   componentePontuacaoId: string,
   lancamentos: LancarNota[],
-): Promise<Lancamento[]> {
+): Promise<LancamentoCriado[]> {
   const corpo: LoteDeLancamentos = { lancamentos }
-  const { data } = await api.post<Lancamento[]>(
+  // Mesma razão do lançamento simples: o lote responde sem o aluno embutido.
+  const { data } = await api.post<LancamentoCriado[]>(
     `/componentes-pontuacao/${componentePontuacaoId}/lancamentos/lote`,
     corpo,
   )

@@ -91,14 +91,26 @@ export interface AlunoDoLancamento {
  * Não tem `id`: a chave primária é o par (componente, aluno), porque um aluno
  * lança uma vez por componente e relançar atualiza no lugar (`upsert`).
  */
+/**
+ * Uma nota lançada, como a **listagem** devolve.
+ *
+ * `aluno` só vem no `GET`: o `POST` de nota simples e o de lote respondem a
+ * entidade criada, sem o aluno embutido (`upsert` cru no `LancamentosService`).
+ * Por isso quem chama os dois lados tem `LancamentoCriado`, abaixo.
+ *
+ * `createdAt`/`updatedAt` não existem: o modelo `Lancamento` do banco tem só as
+ * três colunas de dados e a chave composta, sem carimbo de tempo. Declarar os
+ * dois faria a tela procurar um campo que nunca chega.
+ */
 export interface Lancamento {
   componentePontuacaoId: string
   alunoId: string
   valorNoModelo: string
   aluno: AlunoDoLancamento
-  createdAt: string
-  updatedAt: string
 }
+
+/** Resposta de gravar uma nota (simples ou em lote): sem o aluno embutido. */
+export type LancamentoCriado = Omit<Lancamento, 'aluno'>
 
 /** Uma nota do corpo de lançamento, simples ou em lote. */
 export interface LancarNota {

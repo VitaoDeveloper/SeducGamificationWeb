@@ -69,11 +69,31 @@ export interface EmpateDoBimestre {
   grupos: GrupoEmpatado[]
 }
 
-/** Pontuação final de um grupo na competição, só quando a competição acabou. */
-export interface PontuacaoFinal {
+/** Pontuação final de um aluno na competição, só quando ela acabou. */
+export interface PontuacaoFinalDoAluno {
+  alunoId: string
+  nome: string
+  valor: number
+}
+
+/** Pontuação final de um grupo na competição, só quando ela acabou. */
+export interface PontuacaoFinalDoGrupo {
   grupoId: string
   nome: string
   valor: number
+}
+
+/**
+ * Os dois placares finais, por lado — como a API devolve, em `pontuacoesFinais`
+ * do encerramento.
+ *
+ * São **dois arrays dentro de um objeto**, não um array só. Ordená-los com
+ * posição, empate e desempate é a aba de Rankings (Etapa 08); aqui só o formato
+ * é declarado, porque a tela ainda não os mostra.
+ */
+export interface PontuacoesFinais {
+  alunos: PontuacaoFinalDoAluno[]
+  grupos: PontuacaoFinalDoGrupo[]
 }
 
 /** Corpo de `POST /bimestres/:id/encerrar`. */
@@ -89,7 +109,7 @@ export interface ResultadoDoEncerramento {
   /** `true` quando este encerramento fechou a competição (o 4º bimestre). */
   competicaoConcluida: boolean
   /** Preenchido junto com `competicaoConcluida`; `null` nos outros bimestres. */
-  pontuacoesFinais: PontuacaoFinal[] | null
+  pontuacoesFinais: PontuacoesFinais | null
 }
 
 /**

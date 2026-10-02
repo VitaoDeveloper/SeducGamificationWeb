@@ -99,6 +99,7 @@ export type {
   ComponentePontuacaoDoBimestre,
   ComponentesDoBimestre,
   Lancamento,
+  LancamentoCriado,
   LancarNota,
   LoteDeLancamentos,
   MateriaComPesos,
@@ -110,7 +111,9 @@ export { encerrarBimestre, recusaDoEncerramento } from './encerramento.api'
 export type {
   EmpateDoBimestre,
   GrupoEmpatado,
-  PontuacaoFinal,
+  PontuacoesFinais,
+  PontuacaoFinalDoAluno,
+  PontuacaoFinalDoGrupo,
   RecusaDoEncerramento,
   ResultadoDoEncerramento,
   SinteseOficialDoAluno,
