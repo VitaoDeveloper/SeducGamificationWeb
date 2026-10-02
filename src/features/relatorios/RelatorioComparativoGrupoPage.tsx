@@ -4,6 +4,7 @@ import { Badge, Card, PageHeader, Spinner, Table } from '../../components'
 import type { TableColumn } from '../../components'
 
 import { parcelasDaSoma, seriesDoComparativoDeGrupos } from './series'
+import { BaixarPdf } from './BaixarPdf'
 import { GraficoDeSintese } from './GraficoDeSintese'
 import {
   BlocoDaPontuacaoFinal,
@@ -89,12 +90,15 @@ export function RelatorioComparativoGrupoPage() {
         description={dados ? `${dados.nome} · ${dados.competicaoNome}` : 'Comparação entre grupos'}
         action={
           dados ? (
-            <Link
-              to={rotaDoRelatorioDoGrupo(dados.grupoId)}
-              className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
-            >
-              Ver o relatório do grupo
-            </Link>
+            <>
+              <Link
+                to={rotaDoRelatorioDoGrupo(dados.grupoId)}
+                className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+              >
+                Ver o relatório do grupo
+              </Link>
+              <BaixarPdf relatorio={dados} />
+            </>
           ) : null
         }
       />

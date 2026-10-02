@@ -6,6 +6,8 @@ export {
   serieDoRelatorio,
 } from './series'
 export type { GrupoDoBimestre, SerieComparativa } from './series'
+export { BaixarPdf } from './BaixarPdf'
+export type { BaixarPdfProps } from './BaixarPdf'
 export { GraficoDeSintese } from './GraficoDeSintese'
 export type { GraficoDeSinteseProps, SerieDoGrafico } from './GraficoDeSintese'
 export { RelatorioComparativoAlunoPage } from './RelatorioComparativoAlunoPage'
@@ -27,13 +29,22 @@ export {
 } from './relatorios.componentes'
 export type { BlocoDaPontuacaoFinalProps } from './relatorios.componentes'
 export {
+  baixarPdfDoRelatorio,
   buscarRelatorioComparativoDoAluno,
   buscarRelatorioComparativoDoGrupo,
   buscarRelatorioDoGrupo,
   buscarRelatorioIndividual,
   MENSAGEM_DE_ACESSO_AO_RELATORIO,
+  mensagemDoErroDoPdf,
   traduzirErroDoRelatorio,
 } from './relatorios.api'
+export type { PdfBaixado } from './relatorios.api'
+export {
+  dispararDownload,
+  nomeDoArquivoDoPdf,
+  nomeDoArquivoNaDisposicao,
+  PREFIXO_DO_PDF,
+} from './relatorios.pdf'
 export {
   useRelatorioComparativoDoAluno,
   useRelatorioComparativoDoGrupo,

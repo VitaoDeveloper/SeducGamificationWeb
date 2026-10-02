@@ -989,6 +989,102 @@ export function relatoriosRecusados() {
   ]
 }
 
+/* ----------------------------------------------- PDF dos relatórios (Etapa 11) -- */
+
+/**
+ * Os bytes de um PDF mínimo e estruturalmente válido.
+ *
+ * Não é o PDF que a API monta com `pdfmake`, e não precisa ser: o que a tela faz
+ * com esses bytes é nada mais do que **entregá-los ao navegador** — ela não
+ * abre, não renderiza e não valida o conteúdo. O que o teste precisa é de um
+ * corpo não vazio com `Content-Type: application/pdf`, que é exatamente o que a
+ * tela confere antes de salvar. Um `%PDF-1.4` de verdade (cabeçalho, um catálogo,
+ * uma página e o `%%EOF`) cumpre isso sem fingir ser o relatório do professor.
+ */
+export function pdfDoRelatorio(marca = 'relatorio de teste'): Uint8Array {
+  return new TextEncoder().encode(
+    [
+      '%PDF-1.4',
+      `% ${marca}`,
+      '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
+      '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
+      '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj',
+      'trailer<</Root 1 0 R>>',
+      '%%EOF',
+    ].join('\n'),
+  )
+}
+
+/**
+ * As quatro rotas `.pdf`, respondendo o mesmo arquivo.
+ *
+ * Vêm as quatro juntas porque as quatro telas da Etapa 11 compartilham o mesmo
+ * botão, e o teste de uma delas não deve precisar saber qual prefixo de rota o
+ * relatório dela usa. `nomeDoArquivo` existe para o caso do `Content-Disposition`:
+ * sem ele, a resposta sai como a API de fato responde hoje — `application/pdf` e
+ * **nada** sobre o nome, que é a razão de o frontend ter de montar o seu.
+ */
+export function relatoriosEmPdf(opcoes: { nomeDoArquivo?: string } = {}) {
+  const responder = () =>
+    new HttpResponse(pdfDoRelatorio(), {
+      headers: {
+        'Content-Type': 'application/pdf',
+        ...(opcoes.nomeDoArquivo
+          ? { 'Content-Disposition': `attachment; filename="${opcoes.nomeDoArquivo}"` }
+          : {}),
+      },
+    })
+
+  return [
+    http.get(`${API}/alunos/:alunoId/relatorio-individual.pdf`, responder),
+    http.get(`${API}/alunos/:alunoId/relatorio-comparativo-grupo.pdf`, responder),
+    http.get(`${API}/grupos/:grupoId/relatorio.pdf`, responder),
+    http.get(`${API}/grupos/:grupoId/relatorio-comparativo.pdf`, responder),
+  ]
+}
+
+/**
+ * Recusa de escopo nas quatro rotas `.pdf`, com o `403` cru do NestJS.
+ *
+ * É o mesmo cenário de `relatoriosRecusados`: o PDF respeita exatamente as mesmas
+ * regras de acesso do JSON (RN28-RN30), então um aluno que não pode **ver** o
+ * relatório também não pode baixá-lo — e a tela tem de dizer isso com a frase
+ * amigável, sem `Forbidden` na tela.
+ */
+export function pdfDosRelatoriosRecusado() {
+  const forbidden = { statusCode: 403, message: 'Forbidden', error: 'Forbidden' }
+  const recusado = () => HttpResponse.json(forbidden, { status: 403 })
+
+  return [
+    http.get(`${API}/alunos/:alunoId/relatorio-individual.pdf`, recusado),
+    http.get(`${API}/alunos/:alunoId/relatorio-comparativo-grupo.pdf`, recusado),
+    http.get(`${API}/grupos/:grupoId/relatorio.pdf`, recusado),
+    http.get(`${API}/grupos/:grupoId/relatorio-comparativo.pdf`, recusado),
+  ]
+}
+
+/**
+ * Uma página de HTML no lugar do PDF, com status 200.
+ *
+ * É o que um proxy ou um portal de captive responde no caminho da API, e o
+ *axios não teria como desconfiar: o status é 200. Sem a conferência do
+ * `Content-Type`, esse HTML seria salvo como `relatorio-individual.pdf` — um
+ * arquivo que existe, que abre, e que não é o relatório.
+ */
+export function pdfDosRelatoriosComoPaginaDeErro() {
+  const pagina = () =>
+    new HttpResponse('<html><body>Portal sem internet</body></html>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+
+  return [
+    http.get(`${API}/alunos/:alunoId/relatorio-individual.pdf`, pagina),
+    http.get(`${API}/alunos/:alunoId/relatorio-comparativo-grupo.pdf`, pagina),
+    http.get(`${API}/grupos/:grupoId/relatorio.pdf`, pagina),
+    http.get(`${API}/grupos/:grupoId/relatorio-comparativo.pdf`, pagina),
+  ]
+}
+
 /* ---------------------------------------------------------------- rankings -- */
 
 /** Linha de ranking de equipe, com os campos que a posição já ordena. */

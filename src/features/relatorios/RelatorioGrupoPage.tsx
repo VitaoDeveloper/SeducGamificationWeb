@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 
 import { PageHeader, Spinner } from '../../components'
 
+import { BaixarPdf } from './BaixarPdf'
 import { GraficoDeSintese } from './GraficoDeSintese'
 import {
   AvisoSemSintese,
@@ -55,12 +56,15 @@ export function RelatorioGrupoPage() {
         description={dados ? `${dados.nome} · ${dados.competicaoNome}` : 'Relatório do grupo'}
         action={
           dados ? (
-            <Link
-              to={rotaDoRelatorioComparativoDoGrupo(dados.grupoId)}
-              className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
-            >
-              Comparar com os outros grupos
-            </Link>
+            <>
+              <Link
+                to={rotaDoRelatorioComparativoDoGrupo(dados.grupoId)}
+                className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+              >
+                Comparar com os outros grupos
+              </Link>
+              <BaixarPdf relatorio={dados} />
+            </>
           ) : null
         }
       />

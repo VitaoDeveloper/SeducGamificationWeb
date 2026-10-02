@@ -417,6 +417,81 @@ sabe o id: a página carrega, mostra "Informe o identificador…" e não chama a
   URL (`/aluno?competicaoId=`), e o bloco de relatórios some quando o link não
   trouxe uma, com o aviso que explica o porquê.
 
+## Exportação em PDF (Etapa 11)
+
+As mesmas quatro telas, com um botão **Baixar PDF** no cabeçalho, ao lado do link
+que leva ao outro relatório. A rota é a do JSON com `.pdf` no fim
+(`/alunos/:id/relatorio-individual.pdf`, `/grupos/:id/relatorio.pdf`, …), e a
+resposta é entregue como `blob`, não como o JSON que a tela já sabia ler.
+
+**O botão não pergunta se a competição acabou.** A API gera o PDF parcial e
+carimba nele que o resultado é parcial (RN32, `README-API.md` 11.13); reimplementar
+essa regra na tela criaria um segundo lugar onde a decisão pode divergir da
+gravada no servidor — e o pior desfecho seria recusar um PDF que a API entregaria
+de bom grado.
+
+**O nome do arquivo é montado no front, e o `Content-Disposition` quando vier.**
+A API promete `Content-Type: application/pdf` e o nome `relatorio-*.pdf`, mas não
+promete o cabeçalho que diz o nome — e sem ele o navegador salva o arquivo como
+`download`. Então o nome nasce do relatório que já está na tela:
+`<prefixo-da-rota>-<nome-achatado>.pdf`, que dá
+`relatorio-individual-joao-da-silva.pdf` e `relatorio-equipe-alfa.pdf`. O prefixo
+é o mesmo segmento da rota (o coletivo do grupo é `relatorio`, o comparativo é
+`relatorio-comparativo`), o que faz o nome dizer, sem abrir, qual relatório é. O
+achatamento tira acento, troca separador por hífen e troca `º`/`ª` por `o`/`a` —
+`Turma 2ª` sai `turma-2a`, e não `turma-2ª` depois de um comentário que prometeu
+tirar acento. Quando a API mandar `Content-Disposition` (nos dois formatos,
+`filename` e `filename*`), ele tem precedência: é a fonte que o servidor controla.
+
+**Duas conferências que evitam o arquivo que existe e não é o relatório.** Um `200`
+nem sempre é o que parece: um proxy ou um portal de captive no caminho da API
+devolve a própria página de erro em HTML, com status 200, e o axios não teria como
+desconfiar. Salvar esse HTML como `.pdf` daria ao professor um arquivo que abre e
+não é relatório. Então a chamada recusa um `Content-Type` que não seja
+`application/pdf` e um corpo vazio — e o `403` de escopo sai com a mesma frase
+amigável dos relatórios em JSON, porque o PDF respeita exatamente as mesmas regras
+de acesso.
+
+**O `Content-Type` faz o erro da API chegar como blob.** Com `responseType: 'blob'`,
+a resposta de erro também vem como `Blob`, e não como o JSON que `mensagemDeErro`
+sabe ler: sem ler o corpo, todo erro viraria o mesmo "Request failed with status
+code 500", que é o axios falando e não o servidor. `mensagemDoErroDoPdf` por isso
+é **assíncrona** — é o único `await` no caminho do erro.
+
+Três outras decisões que valem saber antes de mexer:
+
+- **`relatorios.pdf.ts` é um módulo puro**, sem JSX e sem axios, com a rota, o nome
+  e o `dispararDownload`. É ele que permite testar a regra do nome do arquivo sem
+  navegador, e é ele que impede a tela de conhecer `Content-Disposition`.
+- **O `dispararDownload` cria um `<a>`, clica e apaga**, e revoga a URL de objeto no
+  `finally` — inclusive quando o clique não chega ao navegador. Não existe
+  `window.download`; a URL de objeto segura o PDF inteiro na memória enquanto
+  ninguém a revogar.
+- **O `timeout` do PDF é 60 s, e só ele.** Os 15 s globais foram calibrados para o
+  JSON; o PDF é montado no servidor, com gráficos e tabelas, e estourar o tempo
+  devolveria um timeout quando a resposta estava a caminho.
+
+### Limites da API que moldam a tela
+
+- **O `Content-Disposition` é opcional, e talvez não chegue.** Nada na documentação
+  garante o cabeçalho de nome, e é por isso que o nome é sempre montado no front (o
+  cabeçalho, quando vier, só substitui esse nome). Some a isso a regra do CORS: a
+  interface roda em `:5173` e a API em `:3000`, e **`Content-Disposition` não é um
+  cabeçalho liberado por padrão** — sem
+  `Access-Control-Expose-Headers: Content-Disposition` na resposta, o navegador
+  simplesmente não deixa o JavaScript lê-lo, mesmo que a API o mande. O
+  `Content-Type`, ao contrário, é liberado, e é por isso que a conferência do PDF
+  funciona de qualquer jeito. Ou seja: o caminho que funciona sempre é o nome
+  montado; o do cabeçalho é o bônus, se a API decidir liberá-lo.
+- **O `competicaoId` do download sai do relatório carregado, não da URL.** A rota
+  da tela nem sempre o traz — ele é opcional na API —, mas o relatório que já
+  carregou sabe qual competição é esta, e sem mandá-lo a API devolve 400 quando o
+  aluno participa de mais de uma. Nos relatórios de grupo nada é mandado, porque a
+  rota não tem o parâmetro.
+- **A formatação do PDF é responsabilidade da API.** Nenhuma regra de layout, de
+  página ou de carimbo de parcialidade foi reimplementada aqui: a interface consome
+  e baixa o arquivo.
+
 ## Testes
 
 Vitest + Testing Library + `msw`, na mesma convenção do backend
@@ -439,8 +514,9 @@ desligar o mock do anterior.
 | `src/test/server.ts`           | o `setupServer` do msw, sem handlers                 |
 | `src/test/handlers.ts`         | fábricas de handler por cenário, de autenticação a rankings |
 | `src/test/render.tsx`          | renderiza com `ToastProvider`, `AuthProvider` e `MemoryRouter` |
+| `src/test/download.ts`         | espiona o download, porque o jsdom não o implementa — a Etapa 11 |
 
-Dois pontos que valem saber antes de escrever o próximo teste:
+Três pontos que valem saber antes de escrever o próximo teste:
 
 - **A sessão precisa ser limpa entre os testes.** `src/lib/sessao.ts` guarda o
   token numa variável de módulo, que sobrevive de um teste para o outro no mesmo
@@ -449,6 +525,12 @@ Dois pontos que valem saber antes de escrever o próximo teste:
 - **Uma requisição sem handler é erro, não papel.** O msw está com
   `onUnhandledRequest: 'error'`, para o teste que esqueceu de mockar a API
   falhar em vez de passar por uma resposta vazia.
+- **`URL.createObjectURL` não existe no jsdom, e o clique de um `<a>` com `href`
+  faz o jsdom imprimir "Not implemented: navigation".** Um teste que vai até o
+  fim da cadeia do download — resposta em blob, URL de objeto, link, clique —
+  precisa do `espiarNoDownload()` de `src/test/download.ts`, que troca os três por
+  espiões e devolve `baixados` com o nome e o blob de cada arquivo entregue ao
+  navegador. Chame o `restaurar()` no `afterEach`: os espiões são globais.
 
 ## Design system
 
@@ -483,11 +565,11 @@ src/
     competicoes/ competição, bimestres, grupos, componentes, lançamentos e
                 prévia de síntese — as Etapas 04, 05 e 06
     rankings/  tipos, chamadas e componentes dos três rankings — a Etapa 08
-    relatorios/ as quatro telas de relatório, o gráfico e a central de links — a Etapa 10
+    relatorios/ as quatro telas de relatório, o gráfico e a central de links — as Etapas 10 e 11
     aluno/     dashboard do aluno (`/aluno`), sobre os rankings — a Etapa 08
   lib/         cliente HTTP, guarda da sessão, fórmulas de síntese e utilitários
   styles/      tokens de design e estilos globais
-  test/        base dos testes: msw, setup e utilitários de render
+  test/        base dos testes: msw, setup, espião de download e utilitários de render
 ```
 
 `Table`, `Spinner` e o toast, criados na Etapa 01, ganharam uso na Etapa 03: as
@@ -525,3 +607,13 @@ interface: o `Table` reaparece nas tabelas de matérias e de integrantes, o `Car
 nos blocos de resultado e o `Badge` na escala de cada bloco. O que é novo é o
 `GraficoDeSintese`, que embrulha o `recharts` e entrega legenda e tabela `sr-only`
 para o gráfico — de modo que nenhuma tela do projeto precisa conhecer a lib.
+
+A Etapa 11 fecha a rodada sem trazer componente novo de interface também: o
+`BaixarPdf` é o `Button` com `loading` e `loadingText` — os dois que a Etapa 03
+já usava no formulário de sala e a Etapa 07 no encerramento do bimestre — mais o
+toast. O que ela acrescenta são dois módulos: `relatorios.pdf.ts`, que é puro e
+detém a rota `.pdf`, o nome do arquivo e o `dispararDownload`, e o
+`src/test/download.ts`, que resolve a lacuna do jsdom para os testes de download.
+Ela também conserta um tipo da Etapa 10 que só a nova etapa usou: `TipoDeRelatorio`
+tinha só dois dos quatro `tipo`, o que faria o mapa de rota do PDF recusar duas das
+quatro telas em tempo de compilação.

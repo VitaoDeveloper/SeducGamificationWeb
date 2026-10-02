@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Alert, PageHeader, Spinner } from '../../components'
 
 import { gruposPorBimestre, seriesDoComparativoDoAluno } from './series'
+import { BaixarPdf } from './BaixarPdf'
 import { GraficoDeSintese } from './GraficoDeSintese'
 import {
   BlocoDaPontuacaoFinal,
@@ -58,12 +59,15 @@ export function RelatorioComparativoAlunoPage() {
         description={dados ? `${dados.nome} · ${dados.competicaoNome}` : 'Comparação do aluno'}
         action={
           dados ? (
-            <Link
-              to={rotaDoRelatorioIndividual(dados.alunoId, dados.competicaoId)}
-              className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
-            >
-              Ver o relatório individual
-            </Link>
+            <>
+              <Link
+                to={rotaDoRelatorioIndividual(dados.alunoId, dados.competicaoId)}
+                className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+              >
+                Ver o relatório individual
+              </Link>
+              <BaixarPdf relatorio={dados} />
+            </>
           ) : null
         }
       />

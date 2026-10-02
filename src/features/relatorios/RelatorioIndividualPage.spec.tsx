@@ -1,11 +1,16 @@
 import { screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
+import { espiarNoDownload } from '../../test/download'
+import type { EspiaDeDownload } from '../../test/download'
 import { server } from '../../test/server'
 import { renderComSessao } from '../../test/render'
 import {
   bimestreDoAluno,
   relatorioIndividual,
   relatorioIndividualDoAluno,
+  relatoriosEmPdf,
   relatoriosRecusados,
 } from '../../test/handlers'
 import { MENSAGEM_DE_ACESSO_AO_RELATORIO } from './relatorios.api'
@@ -13,6 +18,17 @@ import { RelatorioIndividualPage } from './RelatorioIndividualPage'
 import { ROTA_RELATORIO_INDIVIDUAL } from './rotas'
 
 const ALUNO_ID = 'a1'
+
+/** O espião do download só é montado no teste da Etapa 11 que o usa. */
+let download: EspiaDeDownload | null = null
+
+beforeEach(() => {
+  download = null
+})
+
+afterEach(() => {
+  download?.restaurar()
+})
 
 /**
  * A tela é montada por uma `Route`, e não direto.
@@ -137,5 +153,27 @@ describe('RelatorioIndividualPage', () => {
       'href',
       `/alunos/${ALUNO_ID}/relatorio-comparativo-grupo?competicaoId=comp-1`,
     )
+  })
+
+  it('oferece o PDF no cabeçalho, ao lado do link para o outro relatório', async () => {
+    server.use(
+      relatorioIndividualDoAluno(relatorioIndividual({ alunoId: ALUNO_ID, nome: 'Ana Souza' })),
+      ...relatoriosEmPdf(),
+    )
+    download = espiarNoDownload()
+
+    renderizar()
+
+    // O botão só aparece com o relatório na tela: sem o id e sem o nome não há nem
+    // rota nem nome de arquivo, e um botão que falha ao clique é pior que um
+    // botão que não existe.
+    await screen.findByRole('heading', { name: 'Relatório individual' })
+    expect(screen.getByRole('button', { name: 'Baixar PDF' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Comparar com o grupo' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Baixar PDF' }))
+
+    expect(await screen.findByText('PDF gerado. O download começou.')).toBeInTheDocument()
+    expect(download?.baixados[0]?.nomeDoArquivo).toBe('relatorio-individual-ana-souza.pdf')
   })
 })
