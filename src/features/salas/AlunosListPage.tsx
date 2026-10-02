@@ -36,7 +36,11 @@ export function AlunosListPage() {
       <PageHeader
         title="Alunos"
         description={
-          sala.dados ? `${sala.dados.nome} · ${sala.dados.escola.nome}` : 'Carregando a sala…'
+          sala.dados
+            ? `${sala.dados.nome} · ${sala.dados.escola.nome}`
+            : sala.erro
+              ? 'Sala não carregada'
+              : 'Carregando a sala…'
         }
         action={
           cadastrando ? null : (
@@ -51,6 +55,23 @@ export function AlunosListPage() {
             salaId={salaId ?? ''}
             onCriado={aoCadastrar}
           />
+        ) : null}
+
+        {/*
+         * A lista de alunos vem de outra chamada, então ela sobrevive à falha
+         * desta — mas a falha precisa aparecer. Sem este alerta a tela ficava
+         * presa em "Carregando a sala…" para sempre, sem mensagem e sem botão
+         * para tentar de novo, mesmo com os alunos listados logo abaixo.
+         */}
+        {sala.erro ? (
+          <Alert tone="erro">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{sala.erro}</span>
+              <Button variant="outline" size="sm" onClick={sala.recarregar}>
+                Tentar de novo
+              </Button>
+            </div>
+          </Alert>
         ) : null}
 
         {alunos.erro ? (

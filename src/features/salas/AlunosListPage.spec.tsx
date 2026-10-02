@@ -77,6 +77,70 @@ describe('AlunosListPage', () => {
     expect(screen.getByRole('button', { name: /cadastrar o primeiro aluno/i })).toBeInTheDocument()
   })
 
+  it('mostra o estado de carregamento e o estado vazio', async () => {
+    let liberar: (() => void) | undefined
+    const espera = new Promise<void>((resolve) => {
+      liberar = resolve
+    })
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json([])),
+      http.get(`${API}/salas/:salaId/alunos`, async () => {
+        await espera
+        return HttpResponse.json([])
+      }),
+    )
+    abrirSessao()
+
+    renderizarAlunos()
+
+    // Carregando: o cabeçalho da tabela já está na tela e as linhas são
+    // esqueleto, para a página não pular de altura quando os dados chegarem.
+    expect(await screen.findByText('Carregando…')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Nome' })).toBeInTheDocument()
+    expect(screen.getAllByRole('row')).toHaveLength(4)
+    expect(screen.queryByText(/nenhum aluno nesta sala ainda/i)).not.toBeInTheDocument()
+
+    liberar?.()
+
+    expect(await screen.findByText(/nenhum aluno nesta sala ainda/i)).toBeInTheDocument()
+    expect(screen.queryByText('Carregando…')).not.toBeInTheDocument()
+    // O esqueleto some com a carga: três linhas de pulso que sobrassem na
+    // tela fariam a lista vazia parecer ter alunos.
+    expect(screen.getAllByRole('row')).toHaveLength(1)
+  })
+
+  it('avisa a falha da sala sem esconder a lista de alunos', async () => {
+    let tentativas = 0
+
+    server.use(
+      http.get(`${API}/salas`, () => {
+        tentativas += 1
+        return HttpResponse.json(
+          { statusCode: 500, message: 'Erro interno do servidor.' },
+          { status: 500 },
+        )
+      }),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json([])),
+      http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json([MARIA])),
+    )
+    abrirSessao()
+
+    renderizarAlunos()
+
+    // A lista de alunos vem de outra chamada e continua utilizável; o que não
+    // pode acontecer é a tela ficar presa em "Carregando a sala…" sem erro e
+    // sem botão de nova tentativa.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erro interno do servidor.')
+    expect(screen.getByRole('button', { name: /tentar de novo/i })).toBeInTheDocument()
+    expect(screen.queryByText('Carregando a sala…')).not.toBeInTheDocument()
+    expect(await screen.findByText('Maria da Silva')).toBeInTheDocument()
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /tentar de novo/i }))
+    await waitFor(() => expect(tentativas).toBeGreaterThan(1))
+  })
+
   it('avisa e permite tentar de novo quando a lista de alunos falha', async () => {
     server.use(
       http.get(`${API}/salas`, () => HttpResponse.json([SALA])),

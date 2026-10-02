@@ -177,4 +177,30 @@ describe('SalaDetailPage', () => {
     // A sala é compartilhada: ver o outro professor não é estar inscrito nela.
     expect(screen.getByText('Ainda não leciona nesta sala')).toBeInTheDocument()
   })
+
+  it('mantém a sala na tela quando os lecionamentos não podem ser lidos', async () => {
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () =>
+        HttpResponse.json(
+          { statusCode: 500, message: 'Erro interno do servidor.' },
+          { status: 500 },
+        ),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    // A mesma chamada responde duas perguntas na tela — a lista de professores e
+    // a marca de inscrição. Perder as duas não pode custar a sala inteira, que é
+    // o que a pessoa veio buscar: ela aparece, sem a marca, e o erro fica
+    // visível na seção que dependia dele.
+    expect(await screen.findByRole('heading', { name: '2º DS' })).toBeInTheDocument()
+    expect(screen.getByText(`${ESCOLA_A.nome} · ano letivo 2026`)).toBeInTheDocument()
+    expect(screen.queryByText('Não foi possível carregar a sala.')).not.toBeInTheDocument()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Erro interno do servidor.')
+    expect(screen.getByText('Ainda não leciona nesta sala')).toBeInTheDocument()
+  })
 })

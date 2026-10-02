@@ -92,6 +92,10 @@ export function useSalasAgrupadasPorEscola() {
  * Não existe `GET /salas/:id` na API, então a sala é procurada na listagem — que
  * o professor acabou de ver e que é pequena. Só o `id` da rota muda a busca; o
  * resto da linha já veio junto.
+ *
+ * A leitura dos lecionamentos é tolerante a falha pelo mesmo motivo da
+ * listagem: ela responde apenas se o professor da sessão leciona aqui, e perder
+ * essa marca não pode custar a sala inteira, que é o que a pessoa veio buscar.
  */
 export function useSala(salaId: string | undefined) {
   const { usuario } = useAuth()
@@ -104,12 +108,11 @@ export function useSala(salaId: string | undefined) {
     const sala = salas.find((item) => item.id === salaId)
     if (!sala) return null
 
+    const lecionamentos = await listarLecionamentos(sala.id).catch(() => [] as Lecionamento[])
+
     return {
       ...sala,
-      meuLecionamento:
-        (await listarLecionamentos(sala.id)).find(
-          (lecionamento) => lecionamento.professorId === meuId,
-        ) ?? null,
+      meuLecionamento: lecionamentos.find((lecionamento) => lecionamento.professorId === meuId) ?? null,
     }
   }, `sala:${salaId ?? ''}`, { erroPadrao: 'Não foi possível carregar a sala.' })
 }
