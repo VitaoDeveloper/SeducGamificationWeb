@@ -15,6 +15,16 @@ import {
   SalaDetailPage,
   SalasListPage,
 } from '../features/salas'
+import {
+  ROTA_RELATORIO_COMPARATIVO_DO_ALUNO,
+  ROTA_RELATORIO_COMPARATIVO_DO_GRUPO,
+  ROTA_RELATORIO_DO_GRUPO,
+  ROTA_RELATORIO_INDIVIDUAL,
+  RelatorioComparativoAlunoPage,
+  RelatorioComparativoGrupoPage,
+  RelatorioGrupoPage,
+  RelatorioIndividualPage,
+} from '../features/relatorios'
 import { AuthenticatedLayout } from './AuthenticatedLayout'
 import { ProtectedRoute } from './ProtectedRoute'
 
@@ -64,6 +74,24 @@ export function App() {
               <Route path={ROTA_COMPETICAO_DETALHE} element={<CompeticaoDetailPage />} />
               <Route path="conta/senha" element={<TrocarSenhaPage />} />
               <Route path={ROTA_ALUNO} element={<AlunoDashboardPage />} />
+
+              {/*
+                Os quatro relatórios da Etapa 10 entram aqui, e não dentro de
+                `/salas/:salaId/...`: eles são endereçados pelo aluno ou pelo grupo,
+                e quem chega neles já tem o id do link. A `competicaoId` opcional
+                viaja na query de quem sabe dela (a dos relatórios de aluno), porque
+                a API só a exige quando o aluno participa de mais de uma competição.
+              */}
+              <Route path={ROTA_RELATORIO_INDIVIDUAL} element={<RelatorioIndividualPage />} />
+              <Route
+                path={ROTA_RELATORIO_COMPARATIVO_DO_ALUNO}
+                element={<RelatorioComparativoAlunoPage />}
+              />
+              <Route path={ROTA_RELATORIO_DO_GRUPO} element={<RelatorioGrupoPage />} />
+              <Route
+                path={ROTA_RELATORIO_COMPARATIVO_DO_GRUPO}
+                element={<RelatorioComparativoGrupoPage />}
+              />
             </Route>
 
             <Route path="*" element={<RotaInicial />} />

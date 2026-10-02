@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Alert, Button, PageHeader } from '../../components'
 import { useAuth } from '../auth'
 import { SecaoDeRanking, useRankingDeGrupos, useRankingIndividual } from '../rankings'
+import { RelatoriosDoAluno } from '../relatorios'
 
 /**
  * A primeira tela de verdade do aluno: os rankings da competição dele.
@@ -132,6 +133,15 @@ export function AlunoDashboardPage() {
           aoRecarregar={recarregarTudo}
         />
       ) : null}
+
+      {/*
+       * Os relatórios ficam depois dos rankings, e não antes: o aluno vem aqui
+       * pela posição dele, e o relatório é a explicação — a pergunta seguinte.
+       * O bloco só aparece para o aluno, porque é o dono dos relatórios que ele
+       * pode abrir; o `alunoId` vem da sessão dentro do próprio bloco, e não da
+       * URL (ver `RelatoriosDoAluno`).
+       */}
+      <RelatoriosDoAluno competicaoId={competicaoId} />
     </div>
   )
 }

@@ -255,6 +255,43 @@ describe('CompeticaoDetailPage', () => {
     expect(within(await screen.findByRole('row', { name: /^Ana/ })).getAllByText('8.00')).toHaveLength(2)
   })
 
+  it('abre a central de relatórios com os quatro links de grupo e de aluno', async () => {
+    const pessoa = userEvent.setup()
+    server.use(...cenario())
+    abrirSessao()
+
+    renderizarDetalhe()
+    await screen.findAllByText('Alpha')
+
+    await pessoa.click(screen.getByRole('tab', { name: 'Relatórios' }))
+
+    // A aba é só um índice: nenhuma das quatro telas de relatório é montada aqui, e
+    // por isso ela não busca nada. O `onUnhandledRequest: 'error'` do msw cobra
+    // essa ausência de requisição a cada clique.
+    const porGrupo = await screen.findByRole('region', { name: 'Por grupo' })
+    const linhaDoGrupo = within(porGrupo).getByRole('row', { name: /Alpha/ })
+    expect(within(linhaDoGrupo).getByRole('link', { name: 'Do grupo' })).toHaveAttribute(
+      'href',
+      '/grupos/g1/relatorio',
+    )
+    expect(
+      within(linhaDoGrupo).getByRole('link', { name: 'Comparado aos grupos' }),
+    ).toHaveAttribute('href', '/grupos/g1/relatorio-comparativo')
+
+    // A competição vai na query dos relatórios de aluno: a API só a exige quando o
+    // aluno está em mais de uma competição, e o professor está numa só agora.
+    const porAluno = within(screen.getByRole('region', { name: 'Por aluno' }))
+    const linhaDaAna = within(porAluno.getByRole('row', { name: /Ana/ }))
+    expect(linhaDaAna.getByRole('link', { name: 'Individual' })).toHaveAttribute(
+      'href',
+      '/alunos/a1/relatorio-individual?competicaoId=comp-1',
+    )
+    expect(linhaDaAna.getByRole('link', { name: 'Comparado ao grupo' })).toHaveAttribute(
+      'href',
+      '/alunos/a1/relatorio-comparativo-grupo?competicaoId=comp-1',
+    )
+  })
+
   it('descarta o componente escolhido ao trocar de bimestre', async () => {
     const pessoa = userEvent.setup()
     server.use(...cenario(), ...componentesDoBimestre())

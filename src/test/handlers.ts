@@ -38,6 +38,15 @@ import type {
   RespostaDeRanking,
   RespostaDoRankingIndividual,
 } from '../features/rankings/rankings.tipos'
+import type {
+  BimestreDoAluno,
+  BimestreDoGrupo,
+  MateriaDoAluno,
+  RelatorioComparativoDoAluno,
+  RelatorioComparativoDoGrupo,
+  RelatorioDoGrupo,
+  RelatorioIndividual,
+} from '../features/relatorios/relatorios.tipos'
 
 /**
  * Handlers de autenticação para os testes, em forma de fábrica.
@@ -399,8 +408,6 @@ export function lancamento(
     alunoId: aluno.id,
     valorNoModelo,
     aluno: { id: aluno.id, nome: aluno.nome, codigoMatricula: aluno.codigoMatricula },
-    createdAt: CRIADO_EM,
-    updatedAt: CRIADO_EM,
   }
 }
 
@@ -428,8 +435,6 @@ function registrarNota(
       nome: aluno?.nome ?? 'Aluno',
       codigoMatricula: aluno?.codigoMatricula ?? '',
     },
-    createdAt: CRIADO_EM,
-    updatedAt: CRIADO_EM,
   }
 
   const existente = notas.findIndex(
@@ -744,6 +749,243 @@ export function desempateRecusado(mensagem: string, status = 400) {
     http.post(`${API}/competicoes/:id/desempate/aplicar-automatico`, () =>
       HttpResponse.json(erroDaApi(status, mensagem), { status }),
     ),
+  ]
+}
+
+/* -------------------------------------------------------------- relatórios -- */
+
+/**
+ * Matéria com a síntese do aluno nela, como `RelatoriosService` serializa.
+ */
+export function materiaDoRelatorio(
+  componenteCurricularId: string,
+  nome: string,
+  valor = 8,
+): MateriaDoAluno {
+  return { componenteCurricularId, nome, valor }
+}
+
+/** Um bimestre do relatório de aluno, com as matérias que o compuseram. */
+export function bimestreDoAluno(
+  parcial: Partial<BimestreDoAluno> & Pick<BimestreDoAluno, 'numero'>,
+): BimestreDoAluno {
+  return {
+    bimestreId: `comp-1-b${parcial.numero}`,
+    valor: 8,
+    materias: [materiaDoRelatorio(`mat-${parcial.numero}`, 'Programação Web')],
+    ...parcial,
+  }
+}
+
+/** Um bimestre do relatório do grupo, com quem estava nele. */
+export function bimestreDoGrupo(
+  parcial: Partial<BimestreDoGrupo> & Pick<BimestreDoGrupo, 'numero'>,
+): BimestreDoGrupo {
+  return {
+    bimestreId: `comp-1-b${parcial.numero}`,
+    valor: 8.25,
+    integrantes: [{ alunoId: 'a1', nome: 'Ana Souza', valor: 8.25 }],
+    ...parcial,
+  }
+}
+
+/**
+ * Os bimestres de um relatório de aluno: dois encerrados e um aberto.
+ *
+ * São os mesmos números para o relatório individual e para o do grupo, e é
+ * proposital: é a soma (15.75) deles que o grupo devolve, contra a média (7.88)
+ * que o aluno devolve, e um cenário com números diferentes em cada relatório
+ * esconderia justamente essa distinção.
+ */
+function bimestresDoRelatorioDoAluno(): BimestreDoAluno[] {
+  return [
+    bimestreDoAluno({ numero: 1, valor: 8.25 }),
+    bimestreDoAluno({ numero: 2, valor: 7.5 }),
+    bimestreDoAluno({ numero: 3, valor: null, materias: [] }),
+  ]
+}
+
+/** O cabeçalho que os dois relatórios de aluno compartilham, menos os bimestres. */
+function baseDoRelatorioDoAluno(alunoId: string, nome: string) {
+  return {
+    alunoId,
+    nome,
+    competicaoId: 'comp-1',
+    competicaoNome: 'Competição da Escola',
+    pontuacaoFinal: 7.88,
+  }
+}
+
+/**
+ * Relatório individual do aluno.
+ *
+ * O `pontuacaoFinal` do padrão é a **média** dos dois bimestres encerrados, e é de
+ * propósito diferente da soma que o relatório do grupo devolve para as mesmas
+ * sínteses: é a distinção que o teste de escala precisa ver, e ela precisa estar
+ * no dado — não na tela, que só mostra o que veio.
+ */
+export function relatorioIndividual(
+  parcial: Partial<RelatorioIndividual> & Pick<RelatorioIndividual, 'alunoId' | 'nome'>,
+): RelatorioIndividual {
+  return {
+    ...baseDoRelatorioDoAluno(parcial.alunoId, parcial.nome),
+    tipo: 'individual',
+    bimestres: bimestresDoRelatorioDoAluno(),
+    ...parcial,
+  }
+}
+
+/**
+ * Relatório do aluno comparado ao grupo, com um colega por bimestre.
+ *
+ * Os `colegasDeGrupo` não trazem o próprio aluno — a API lista os *outros* — e é
+ * por isso que o cenário tem um colega de verdade: a tela monta a série do aluno
+ * por conta própria, e um relatório sem colega nenhum não provaria nada.
+ *
+ * O bimestre sem síntese (o 3º do padrão) também fica sem grupo, que é o que a API
+ * devolve: bimestre aberto não tem equipe montada, e é isso que dá à tela a linha
+ * "sem grupo" da lista por bimestre.
+ */
+export function relatorioComparativoDoAluno(
+  parcial: Partial<RelatorioComparativoDoAluno> &
+    Pick<RelatorioComparativoDoAluno, 'alunoId' | 'nome'>,
+): RelatorioComparativoDoAluno {
+  const base = {
+    ...baseDoRelatorioDoAluno(parcial.alunoId, parcial.nome),
+    bimestres: bimestresDoRelatorioDoAluno(),
+  }
+
+  return {
+    ...base,
+    tipo: 'comparativo-grupo',
+    bimestres: base.bimestres.map((bimestre) => ({
+      ...bimestre,
+      grupo: bimestre.valor === null ? null : { grupoId: 'g1', nome: 'Equipe Alfa' },
+      colegasDeGrupo: [
+        {
+          alunoId: 'a2',
+          nome: 'Bruno Lima',
+          valor: bimestre.valor === null ? null : 6.5,
+          materias: [materiaDoRelatorio(`mat-${bimestre.numero}`, 'Programação Web', 6.5)],
+        },
+      ],
+    })),
+    ...parcial,
+  }
+}
+
+/** O cabeçalho que os dois relatórios de grupo compartilham, menos os bimestres. */
+function baseDoRelatorioDoGrupo(grupoId: string, nome: string) {
+  return {
+    grupoId,
+    nome,
+    competicaoId: 'comp-1',
+    competicaoNome: 'Competição da Escola',
+    pontuacaoFinal: 15.75,
+  }
+}
+
+/**
+ * Relatório coletivo do grupo.
+ *
+ * O `pontuacaoFinal` do padrão é a **soma** das duas sínteses encerradas (15.75), e
+ * não a média: é o número que o gráfico — cujo eixo vai a 10 — não pode conter.
+ */
+export function relatorioDoGrupo(
+  parcial: Partial<RelatorioDoGrupo> & Pick<RelatorioDoGrupo, 'grupoId' | 'nome'>,
+): RelatorioDoGrupo {
+  return {
+    ...baseDoRelatorioDoGrupo(parcial.grupoId, parcial.nome),
+    tipo: 'coletivo-grupo',
+    bimestres: [
+      bimestreDoGrupo({ numero: 1, valor: 8.25 }),
+      bimestreDoGrupo({ numero: 2, valor: 7.5 }),
+      bimestreDoGrupo({ numero: 3, valor: null, integrantes: [] }),
+    ],
+    ...parcial,
+  }
+}
+
+/**
+ * Relatório do grupo comparado aos demais, com um segundo grupo no comparativo.
+ *
+ * A API manda no `comparativo` **só os outros** grupos, e o fixture segue a mesma
+ * regra: o time do próprio relatório entra pela lista de bimestres dele, e quem
+ * responde se a tela o soma ao comparativo é o teste.
+ */
+export function relatorioComparativoDoGrupo(
+  parcial: Partial<RelatorioComparativoDoGrupo> &
+    Pick<RelatorioComparativoDoGrupo, 'grupoId' | 'nome'>,
+): RelatorioComparativoDoGrupo {
+  const base = baseDoRelatorioDoGrupo(parcial.grupoId, parcial.nome)
+
+  return {
+    ...base,
+    tipo: 'comparativo-grupos',
+    bimestres: [
+      bimestreDoGrupo({ numero: 1, valor: 8.25 }),
+      bimestreDoGrupo({ numero: 2, valor: 7.5 }),
+      bimestreDoGrupo({ numero: 3, valor: null, integrantes: [] }),
+    ],
+    comparativo: [
+      {
+        grupoId: 'g2',
+        nome: 'Equipe Beta',
+        pontuacaoFinal: 14.25,
+        bimestres: [
+          { bimestreId: 'comp-1-b1', numero: 1, valor: 7 },
+          { bimestreId: 'comp-1-b2', numero: 2, valor: 7.25 },
+          { bimestreId: 'comp-1-b3', numero: 3, valor: null },
+        ],
+      },
+    ],
+    ...parcial,
+  }
+}
+
+/** `GET /alunos/:alunoId/relatorio-individual`. */
+export function relatorioIndividualDoAluno(resposta: RelatorioIndividual) {
+  return http.get(`${API}/alunos/:alunoId/relatorio-individual`, () => HttpResponse.json(resposta))
+}
+
+/** `GET /alunos/:alunoId/relatorio-comparativo-grupo`. */
+export function relatorioComparativoDoAlunoHandler(resposta: RelatorioComparativoDoAluno) {
+  return http.get(`${API}/alunos/:alunoId/relatorio-comparativo-grupo`, () =>
+    HttpResponse.json(resposta),
+  )
+}
+
+/** `GET /grupos/:grupoId/relatorio`. */
+export function relatorioDoGrupoHandler(resposta: RelatorioDoGrupo) {
+  return http.get(`${API}/grupos/:grupoId/relatorio`, () => HttpResponse.json(resposta))
+}
+
+/** `GET /grupos/:grupoId/relatorio-comparativo`. */
+export function relatorioComparativoDoGrupoHandler(resposta: RelatorioComparativoDoGrupo) {
+  return http.get(`${API}/grupos/:grupoId/relatorio-comparativo`, () =>
+    HttpResponse.json(resposta),
+  )
+}
+
+/**
+ * Recusa de escopo nos quatro relatórios: a API responde `403` quando o aluno pede
+ * o relatório de outro, quando o grupo é de outra competição e quando o professor
+ * não é da sala do recurso.
+ *
+ * É a resposta que o critério de aceite da Etapa 10 manda tratar sem quebrar a
+ * página, e o corpo é o "Forbidden" cru do NestJS de propósito: se a tela mostrar
+ * a mensagem amigável, é porque a tradução aconteceu — e o teste afirma que a
+ * palavra "Forbidden" não aparece na tela.
+ */
+export function relatoriosRecusados() {
+  const forbidden = { statusCode: 403, message: 'Forbidden', error: 'Forbidden' }
+  const recusado = () => HttpResponse.json(forbidden, { status: 403 })
+
+  return [
+    http.get(`${API}/alunos/:alunoId/relatorio-individual`, recusado),
+    http.get(`${API}/alunos/:alunoId/relatorio-comparativo-grupo`, recusado),
+    http.get(`${API}/grupos/:grupoId/relatorio`, recusado),
+    http.get(`${API}/grupos/:grupoId/relatorio-comparativo`, recusado),
   ]
 }
 

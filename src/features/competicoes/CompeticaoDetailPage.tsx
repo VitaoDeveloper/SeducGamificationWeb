@@ -25,6 +25,11 @@ import { PreviaDaSintese } from './PreviaDaSintese'
 import { SintesesOficiais } from './SintesesOficiais'
 import { RankingDaCompeticao, TIPO_RANKING } from '../rankings'
 import type { TipoRanking } from '../rankings'
+import {
+  RelatoriosDaCompeticao,
+  rotaDoRelatorioComparativoDoGrupo,
+  rotaDoRelatorioDoGrupo,
+} from '../relatorios'
 import { modeloAvaliacaoDaEscola } from './modelo-avaliacao'
 import { NovoGrupoForm } from './NovoGrupoForm'
 import { SelecaoDeBimestre } from './SelecaoDeBimestre'
@@ -37,8 +42,22 @@ import type { PendenciaDeDesempate } from './desempate.tipos'
 const ABA = 'rounded-full px-3.5 py-2 text-sm font-medium transition-colors'
 const ABA_ATIVA = 'bg-primary-50 text-primary-700'
 
-/** As seções da competição, na ordem em que o professor monta o bimestre. */
-type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa' | 'rankings'
+/**
+ * As seções da competição, na ordem em que o professor monta o bimestre.
+ *
+ * "Relatórios" entra por último, e não porque dependa de um bimestre: ela não usa
+ * o seletor da página (mostra a competição inteira), e é uma leitura de resultado,
+ * não mais um passo de montagem. Colocá-la ao fim da lista diz isso sem precisar
+ * de aviso — o professor que está montando o 2º bimestre não abre "Relatórios"
+ * esperando mais uma coisa para fazer ali.
+ */
+type AbaDaCompeticao =
+  | 'grupos'
+  | 'componentes'
+  | 'lancamentos'
+  | 'previa'
+  | 'rankings'
+  | 'relatorios'
 
 /**
  * Abas da competição.
@@ -54,10 +73,11 @@ type AbaDaCompeticao = 'grupos' | 'componentes' | 'lancamentos' | 'previa' | 'ra
  * Na Etapa 07 a mesma aba ganha o outro nome depois do encerramento: com a síntese
  * gravada, o que está na tela deixou de ser prévia (ver `rotuloDaAba`).
  *
- * "Rankings" é a única que não se pendura no seletor de bimestre da página: os
- * três rankings têm vida própria (parcial escolhe bimestre, anual e individual
- * somam os quatro), e reaproveitar o seletor global obrigaria o professor a
- * trocar o bimestre da página para ver o ranking do ano.
+ * "Rankings" é a única das quatro primeiras que não se pendura no seletor de
+ * bimestre da página: os três rankings têm vida própria (parcial escolhe bimestre,
+ * anual e individual somam os quatro), e reaproveitar o seletor global obrigaria o
+ * professor a trocar o bimestre da página para ver o ranking do ano. "Relatórios"
+ * (Etapa 10) é igual: tem os quatro relatórios da competição, não do bimestre.
  */
 const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
   { id: 'grupos', rotulo: 'Grupos' },
@@ -65,6 +85,7 @@ const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
   { id: 'lancamentos', rotulo: 'Lançamentos' },
   { id: 'previa', rotulo: 'Prévia' },
   { id: 'rankings', rotulo: 'Rankings' },
+  { id: 'relatorios', rotulo: 'Relatórios' },
 ]
 
 /**
@@ -489,6 +510,7 @@ export function CompeticaoDetailPage() {
                           encerrado={encerrado}
                           grupos={listaDeGrupos}
                           alunos={alunos.dados ?? []}
+                          competicaoId={dados.id}
                           onAlterado={aoMudarGrupos}
                         />
                       )}
@@ -569,6 +591,28 @@ export function CompeticaoDetailPage() {
               revalidacao={desempatesGravados}
             />
           ) : null}
+
+          {/*
+           * A aba de relatórios é a mais barata da página em dados e a mais ampla
+           * em leitura: ela não busca nada (as quatro telas de relatório
+           * buscariam por conta própria se fossem montadas aqui) e só liga os
+           * relatórios que a API já descreve. Os grupos vêm do `useGrupos` que a
+           * página já tinha por causa da aba de Grupos, e os alunos da sala que a
+           * tela de composição já carregava — nenhuma das duas listas é um custo
+           * novo da aba.
+           *
+           * A `competicaoId` é passada para os links de aluno porque a API só a
+           * exige quando o aluno participa de mais de uma competição, e o professor
+           * está olhando uma competição específica: sem ela, o link seria um `400`.
+           */}
+          {aba === 'relatorios' ? (
+            <RelatoriosDaCompeticao
+              competicaoId={dados.id}
+              grupos={listaDeGrupos}
+              alunos={alunos.dados ?? []}
+              carregando={grupos.carregando || alunos.carregando}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -626,6 +670,14 @@ function BlocoDeBimestre({ bimestre }: { bimestre: Bimestre }) {
   )
 }
 
+/**
+ * O cartão do grupo, com os atalhos para os dois relatórios dele.
+ *
+ * Os links ficam no cartão — e não só na aba de Relatórios — porque a tela de
+ * grupos é onde o professor já está quando pergunta "esse time foi bem?". O atalho
+ * é sempre o relatório **coletivo** do grupo, e não o comparado: comparar exige
+ * saber que a comparação importa, e a lista da aba é onde se escolhe isso.
+ */
 function CartaoDeGrupo({ grupo }: { grupo: GrupoComMembros }) {
   return (
     <Card>
@@ -648,6 +700,26 @@ function CartaoDeGrupo({ grupo }: { grupo: GrupoComMembros }) {
       ) : (
         <p className="text-neutral-500 mt-2 text-sm">Nenhum integrante neste bimestre.</p>
       )}
+
+      {/*
+       * Os dois relatórios do grupo, sempre disponíveis — inclusive para o grupo
+       * vazio, porque o relatório de um grupo sem ninguém neste bimestre ainda
+       * mostra a síntese dos bimestres anteriores.
+       */}
+      <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+        <Link
+          className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+          to={rotaDoRelatorioDoGrupo(grupo.id)}
+        >
+          Relatório do grupo
+        </Link>
+        <Link
+          className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+          to={rotaDoRelatorioComparativoDoGrupo(grupo.id)}
+        >
+          Comparar com os grupos
+        </Link>
+      </p>
     </Card>
   )
 }

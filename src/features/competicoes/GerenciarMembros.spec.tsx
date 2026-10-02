@@ -108,6 +108,50 @@ describe('GerenciarMembros', () => {
     expect(chamadas).toEqual(['POST:g2'])
   })
 
+  it('oferece o relatório individual na terceira coluna, com a competição', () => {
+    renderComSessao(
+      <GerenciarMembros
+        bimestreId="b1"
+        encerrado={false}
+        grupos={[comMembros(GRUPO_A, [membro('g1', ANA, 'b1')])]}
+        alunos={[ANA, BIA]}
+        competicaoId="comp-1"
+        onAlterado={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('columnheader', { name: 'Relatório' })).toBeInTheDocument()
+    /*
+     * O atalho responde o ano inteiro, e é por isso que ele fica na composição, e
+     * não no grupo: o nome do aluno é o que o professor tem na tela. A competição
+     * vai na query porque a API só a exige quando o aluno está em mais de uma.
+     */
+    expect(screen.getAllByRole('link', { name: 'Ver relatório' })[0]).toHaveAttribute(
+      'href',
+      '/alunos/a1/relatorio-individual?competicaoId=comp-1',
+    )
+  })
+
+  it('omite a coluna de relatório quando a tela não sabe a competição', () => {
+    /*
+     * Sem `competicaoId`, a coluna inteira some. Um atalho para um relatório que a
+     * API recusaria com `400` seria pior do que nenhum atalho: o professor
+     * descobriria o problema só depois de clicar.
+     */
+    renderComSessao(
+      <GerenciarMembros
+        bimestreId="b1"
+        encerrado={false}
+        grupos={[comMembros(GRUPO_A, [membro('g1', ANA, 'b1')])]}
+        alunos={[ANA]}
+        onAlterado={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('columnheader', { name: 'Relatório' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
   it('mostra o erro da API e devolve o aluno ao grupo antigo quando o novo vínculo falha', async () => {
     const pessoa = userEvent.setup()
     const chamadas: string[] = []

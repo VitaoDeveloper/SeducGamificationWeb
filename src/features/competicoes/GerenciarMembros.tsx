@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Alert, Select, Table, useToast } from '../../components'
 import type { TableColumn } from '../../components'
 import { mensagemDeErro } from '../../lib/erro-api'
 import { adicionarMembro, removerMembro } from './competicoes.api'
 import type { GrupoComMembros } from './competicoes.tipos'
+import { rotaDoRelatorioIndividual } from '../relatorios/rotas'
 import type { Aluno } from '../salas/salas.tipos'
 
 export interface GerenciarMembrosProps {
@@ -13,6 +15,13 @@ export interface GerenciarMembrosProps {
   encerrado: boolean
   grupos: GrupoComMembros[]
   alunos: Aluno[]
+  /**
+   * Competição em exibição, para o atalho do relatório individual.
+   *
+   * Opcional de propósito: a composição aparece na tela de grupos mesmo antes de
+   * a lista de relatórios existir, e o atalho só é montado quando há competição.
+   */
+  competicaoId?: string
   /** Chamado depois de uma mudança aceita, para a tela recarregar os grupos. */
   onAlterado: () => void
 }
@@ -37,12 +46,18 @@ interface LinhaDeComposicao {
  * API não conhece como uma só. A interface nunca mostra o aluno em dois grupos
  * porque o `value` de cada select sai dos dados do servidor, e não de um estado
  * local que poderia divergir deles.
+ *
+ * A última coluna é o atalho para o relatório individual do aluno (Etapa 10). Ele
+ * fica aqui porque a composição é a tela em que o professor tem o nome do aluno na
+ * frente: é de onde a pergunta "como foi este aluno no ano?" sai, e o relatório
+ * responde o ano inteiro, não o bimestre que está selecionado.
  */
 export function GerenciarMembros({
   bimestreId,
   encerrado,
   grupos,
   alunos,
+  competicaoId,
   onAlterado,
 }: GerenciarMembrosProps) {
   const toast = useToast()
@@ -145,6 +160,32 @@ export function GerenciarMembros({
         </Select>
       ),
     },
+    /*
+     * O atalho do relatório individual é a terceira coluna, e não um botão ao
+     * lado do nome: a pergunta "como foi este aluno no ano?" é do mesmo tamanho da
+     * pergunta "de quem é este grupo?", e as duas linhas da tabela precisam ficar
+     * alinhadas para o professor percorrer a turma olhando as duas coisas.
+     *
+     * A coluna some quando a tela não sabe a competição — o atalho não pode levar
+     * a um `400` de "informe competicaoId" só porque quem abriu a tela não tinha o
+     * id à mão.
+     */
+    ...(competicaoId
+      ? [
+          {
+            key: 'relatorio',
+            header: 'Relatório',
+            cell: (linha: LinhaDeComposicao) => (
+              <Link
+                className="text-primary-700 hover:text-primary-800 text-sm font-medium underline underline-offset-2"
+                to={rotaDoRelatorioIndividual(linha.aluno.id, competicaoId)}
+              >
+                Ver relatório
+              </Link>
+            ),
+          } satisfies TableColumn<LinhaDeComposicao>,
+        ]
+      : []),
   ]
 
   return (

@@ -141,6 +141,38 @@ describe('AlunoDashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument()
   })
 
+  it('oferece os dois relatórios do aluno, sempre os dele', async () => {
+    server.use(...rankingsCompletos())
+    abrirSessao()
+
+    renderizar(`/aluno?competicaoId=${COMPETICAO_ID}&bimestreId=${BIMESTRE_FECHADO}`)
+
+    const cartao = (await screen.findByRole('heading', { name: 'Meus relatórios' })).closest(
+      'div',
+    ) as HTMLElement
+
+    /*
+     * O `alunoId` do link é o da sessão. Se viesse da URL, o dashboard viraria um
+     * gerador de link para o relatório de qualquer pessoa: a API recusaria com
+     * `403`, mas a tela já teria oferecido o caminho.
+     */
+    expect(within(cartao).getByRole('link', { name: 'Meu relatório individual' })).toHaveAttribute(
+      'href',
+      `/alunos/${ALUNO_DA_SESSAO}/relatorio-individual?competicaoId=${COMPETICAO_ID}`,
+    )
+    expect(
+      within(cartao).getByRole('link', { name: 'Meu relatório comparado ao grupo' }),
+    ).toHaveAttribute(
+      'href',
+      `/alunos/${ALUNO_DA_SESSAO}/relatorio-comparativo-grupo?competicaoId=${COMPETICAO_ID}`,
+    )
+
+    // Os relatórios de grupo não aparecem: são endereçados por `grupoId`, e a API
+    // não diz ao aluno a que grupo ele pertence.
+    expect(within(cartao).queryByRole('link', { name: /Do grupo/ })).not.toBeInTheDocument()
+    expect(within(cartao).getAllByRole('link')).toHaveLength(2)
+  })
+
   it('orienta a abrir pelo link quando a URL não traz a competição', async () => {
     abrirSessao()
 

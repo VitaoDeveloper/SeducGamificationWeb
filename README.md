@@ -324,6 +324,99 @@ Decisões que valem conhecer:
   o link trazer `?bimestreId`; sem ele, a seção do bimestre não aparece e nenhuma
   requisição é feita.
 
+## Relatórios — quatro telas (Etapa 10)
+
+Quatro relatórios, quatro endpoints, e a mesma pergunta em duas direções: como o
+ano do aluno foi, e como o ano do grupo foi.
+
+| Relatório            | Rota                                | Endpoint da API                           |
+| -------------------- | ----------------------------------- | ----------------------------------------- |
+| Individual do aluno  | `/alunos/:id/relatorio-individual`  | `GET /alunos/:id/relatorio-individual`    |
+| Aluno × grupo        | `/alunos/:id/relatorio-comparativo-grupo` | `GET /alunos/:id/relatorio-comparativo-grupo` |
+| Coletivo do grupo    | `/grupos/:id/relatorio`             | `GET /grupos/:id/relatorio`               |
+| Grupo × grupos       | `/grupos/:id/relatorio-comparativo` | `GET /grupos/:id/relatorio-comparativo`   |
+
+Os quatro são **só leitura**: mostram o que a API gravou no encerramento do
+bimestre, e não refazem conta nenhuma. O individual traz a linha da síntese por
+bimestre e a tabela de matérias de cada um; o comparado ao grupo repete a linha do
+aluno ao lado da de cada colega **do grupo daquele bimestre** — o grupo pode mudar
+entre bimestres, então a lista de quem era colega é por bimestre, e a série de um
+colega que saiu tem intervalo em branco, não zero; o coletivo do grupo troca a
+escala: a síntese do time por bimestre mais a soma das quatro em destaque, e a
+tabela de integrantes com a síntese individual de cada um; o comparado aos grupos
+repete o gráfico do coletivo com uma série por equipe.
+
+**As escalas ficam separadas por desenho, não por esforço do leitor.**
+`relatorios.tipos.ts` descreve três escalas — `SINTESE_BIMESTRAL` e `MEDIA_BIMESTRAL`
+(0 a 10) e `SOMA_BIMESTRAL` (0 a 40) — e o formatador `formatarPontuacao` é o
+**mesmo** nas três: escreve o número que a API mandou, com duas casas, e `null`
+vira traço, nunca `0.00`. Isso é proposital. Um formatador que dividisse a soma por
+4 devolveria um número "que cabe" em 0 a 10 e a mistura voltaria a ser possível
+precisamente por parecer inocente; quem separa é o rótulo. Por isso a pontuação
+final nunca entra no eixo do gráfico: ela mora em `BlocoDaPontuacaoFinal`, que
+carrega o nome da escala, o teto ("0 a 10", "0 a 40") e, no caso da soma, as
+parcelas (`1º: 8.25 · 2º: 7.50 · …`) — ver a conta decomposta é o que deixa
+claro que `31.80` não é uma nota.
+
+**Os gráficos são `recharts`.** A escolha: é a lib de gráfico mais usada do
+ecossistema React, é só React (sem D3 para desenhar), e linhas e barras simples —
+tudo que a Etapa 10 pede — saem em uma dúzia de linhas. Não foi preciso nada além
+disso, e o `recharts` é a única dependência de runtime que a Etapa 10 acrescentou.
+Três decisões de uso:
+
+- **Sem `ResponsiveContainer`.** Ele mede o pai com `ResizeObserver`, e em jsdom isso
+  não existe: o gráfico sairia com 0×0 e os testes virariam teste de medidor. O
+  `useLarguraDisponivel` de `GraficoDeSintese.tsx` usa o `ResizeObserver` quando há
+  um e cai em 640px quando não há, o que mantém o teste determinístico.
+- **Sem animação** (`isAnimationActive={false}`) e **sem costurar lacunas**
+  (`connectNulls={false}`): um relatório é para ser conferido, não para parecer
+  animado.
+- **Legenda feita à mão, e uma tabela `sr-only` com os mesmos valores.** O recharts
+  não expõe os números em texto, então a tabela é o que dá o valor a um leitor de
+  tela — e o que os testes leem, sem depender de coordenadas do SVG.
+
+O preço: o `recharts` é a maior dependência que o projeto tem, e ele entrou no
+**bundle principal** (422 kB → 781 kB minificado, 129 kB → 233 kB gzip), porque
+`CompeticaoDetailPage` importa `RelatoriosDaCompeticao` pelo barrel de
+`features/relatorios`, e o barrel também exporta as quatro telas e o
+`GraficoDeSintese`. Quem paga isso é a tela de login, que é a primeira de todas.
+Separar exigiria duas mudanças — `React.lazy` nas quatro rotas e import direto
+(pelo caminho do arquivo, não pelo barrel) na aba de relatórios — e só compensa se
+o gráfico entrar em uso com frequência; quando entrar, o `Suspense` de cada rota
+tem que ter uma espera que não pisque entre dois renders. Fica anotado aqui como
+dívida conhecida, e não escondido atrás de um número redondo.
+
+A navegação para os quatro relatórios vem de três lugares: a aba **Relatórios**
+da competição (uma tabela por grupo e outra por aluno), a coluna "Ver relatório"
+da composição de grupos da Etapa 04, e o bloco "Meus relatórios" do dashboard do
+aluno. O `alunoId` do link do aluno sai **da sessão**, nunca da URL: um id na
+query transformaria o dashboard num gerador de link para o relatório de qualquer
+pessoa — a API recusaria com `403`, mas a tela já teria oferecido o caminho. Os
+relatórios de grupo não aparecem para o aluno porque são endereçados por
+`grupoId`, e não existe endpoint que diga a ele a que grupo pertence.
+
+O `403` vira uma frase — a mesma mensagem amigável que os rankings usam, sem
+`Forbidden` nem `statusCode` na tela. Nenhum relatório é montado se a tela não
+sabe o id: a página carrega, mostra "Informe o identificador…" e não chama a API.
+
+### Limites da API que moldam a tela
+
+- **A soma do grupo é a soma, e a média do aluno é a média.** `pontuacaoFinal`
+  chega de cada endpoint já no sentido certo (média para o aluno, soma para o
+  grupo), e a tela escreve o que chegou.
+- **`comparativo` e `colegasDeGrupo` não incluem quem está lendo.** O
+  `relatorio-comparativo-grupo` lista os *outros* integrantes, e o
+  `relatorio-comparativo` lista os *outros* grupos. As séries de quem está lendo
+  saem do relatório principal (em `series.ts`), e é por isso que esse arquivo é um
+  módulo puro sem JSX: a regra de junção por `alunoId` é o que garante que a linha
+  do aluno e a do colega que mudou de grupo se cruzem sem se costurar.
+- **`GET /grupos/:id/relatorio` descobre a competição pelo grupo.** Por isso a rota
+  do relatório de grupo não leva `competicaoId`; as de aluno levam, porque a API
+  só exige quando o aluno participa de mais de uma competição.
+- **Sem "minhas competições".** A tela do aluno continua recebendo a competição na
+  URL (`/aluno?competicaoId=`), e o bloco de relatórios some quando o link não
+  trouxe uma, com o aviso que explica o porquê.
+
 ## Testes
 
 Vitest + Testing Library + `msw`, na mesma convenção do backend
@@ -390,6 +483,7 @@ src/
     competicoes/ competição, bimestres, grupos, componentes, lançamentos e
                 prévia de síntese — as Etapas 04, 05 e 06
     rankings/  tipos, chamadas e componentes dos três rankings — a Etapa 08
+    relatorios/ as quatro telas de relatório, o gráfico e a central de links — a Etapa 10
     aluno/     dashboard do aluno (`/aluno`), sobre os rankings — a Etapa 08
   lib/         cliente HTTP, guarda da sessão, fórmulas de síntese e utilitários
   styles/      tokens de design e estilos globais
@@ -425,3 +519,9 @@ nasce como feature própria porque a tabela é a mesma para os dois perfis: o
 professor a vê em três sub-visões na competição, e o aluno, em seções no
 dashboard. O `Table` continua sendo a grade, agora com esqueleto de carga também
 na primeira leitura do ranking.
+
+A Etapa 10 cria `relatorios/` com as quatro telas e não traz componente novo de
+interface: o `Table` reaparece nas tabelas de matérias e de integrantes, o `Card`
+nos blocos de resultado e o `Badge` na escala de cada bloco. O que é novo é o
+`GraficoDeSintese`, que embrulha o `recharts` e entrega legenda e tabela `sr-only`
+para o gráfico — de modo que nenhuma tela do projeto precisa conhecer a lib.
