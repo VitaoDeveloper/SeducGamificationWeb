@@ -5,17 +5,21 @@
  * campo que o professor preenche precisa mudar junto: escrever "8.5" num seletor
  * de rótulos, ou "MB" num campo numérico, erra a cada aluno da turma.
  *
- * **A API não expõe o modelo da escola.** Não existe rota de modelos de
- * avaliação, e `GET /salas` devolve `escola: { id, nome }` por um `select`
- * explícito que não inclui `modeloAvaliacao`. O `LancamentosService` usa o modelo
- * por dentro, só para recusar valor fora da escala com 400. Enquanto isso,
- * `modeloAvaliacaoDaEscola` é a costura: ela devolve o modelo do seed da API
- * (CPS ETEC, que é a escola de exemplo) e, quando existir a rota, muda o corpo
- * dela. Os componentes recebem o modelo por prop, então nada mais muda junto —
- * nem a validação, que já espelha a do backend.
+ * **O modelo vem da API, e é ela quem decide.** `GET /salas` e `GET /escolas`
+ * mandam a escola com `modeloAvaliacao: { tipoEscala, nivelEscalas }`, e o
+ * `LancamentosService` valida o lançamento contra o mesmo dado do banco. Renderizar
+ * e validar lendo a mesma resposta é o que impede o cadastro de ser recusado com
+ * 400 depois de a tela ter aceitado o valor — o que acontecia quando esta função
+ * devolvia um modelo fixo para toda escola, e a escola numérica via o seletor de
+ * conceitos.
+ *
+ * Quando a API não diz qual é o modelo, `modeloAvaliacaoDaEscola` devolve `null` e
+ * a tela **não mostra campo nenhum**: sem saber a escala, qualquer campo mostrado
+ * erraria a turma. Inventar um modelo é o que produziu o bug; o caminho honesto é
+ * recusar e dizer por quê.
  */
 
-import type { EscalaParaCalculo, NivelDaEscala } from '../../lib/sinteseCalculo'
+import type { EscalaParaCalculo } from '../../lib/sinteseCalculo'
 import type { EscolaResumo } from '../salas/salas.tipos'
 
 export const TIPO_ESCALA = {
@@ -39,9 +43,9 @@ export interface ModeloAvaliacao extends EscalaParaCalculo {
    * Rótulos do modelo conceitual, na ordem da escala. Vazio no numérico, que não
    * tem rótulo: o professor digita o número.
    *
-   * Derivado de `niveis` por `modeloDe`, e não escrito à mão: as duas coisas
-   * descreveriam a mesma escala, e divergirem entre si mostraria um "MB" no
-   * seletor que a conta não soube converter.
+   * Derivado de `niveis` por `modeloAvaliacaoDaEscola`, e não escrito à mão: as
+   * duas coisas descreveriam a mesma escala, e divergirem entre si mostraria um
+   * "MB" no seletor que a conta não soube converter.
    */
   rotulos: string[]
 }
@@ -50,33 +54,6 @@ export interface ValidacaoDeValor {
   valido: boolean
   /** Texto a mostrar no campo da nota, quando o valor não serve. */
   erro?: string
-}
-
-/** Escola numérica: o professor digita a nota de 1 a 10. */
-export const MODELO_NUMERICO: ModeloAvaliacao = modeloDe(TIPO_ESCALA.NUMERICA)
-
-/**
- * Escola conceitual: o professor escolhe um dos rótulos da escala.
- *
- * Os valores são os do seed da API (`nivelEscalas` do `modeloAvaliacao` da
- * escola), e é com eles que o backend converte o conceito na conta da síntese.
- * Estão aqui porque a prévia calcula no front e precisa do mesmo número.
- */
-export const MODELO_CPS_ETEC: ModeloAvaliacao = modeloDe(TIPO_ESCALA.CPS_ETEC, [
-  { rotulo: 'I', valorNumerico: 3 },
-  { rotulo: 'R', valorNumerico: 5 },
-  { rotulo: 'B', valorNumerico: 8 },
-  { rotulo: 'MB', valorNumerico: 10 },
-])
-
-/**
- * Monta um modelo a partir dos níveis, derivando os rótulos.
- *
- * Existe para os dois modelos serem escritos uma vez só: `niveis` é o que a
- * conta lê e `rotulos` é o que o seletor da tela mostra.
- */
-function modeloDe(tipoEscala: TipoEscala, niveis: readonly NivelDaEscala[] = []): ModeloAvaliacao {
-  return { tipoEscala, niveis, rotulos: niveis.map((nivel) => nivel.rotulo) }
 }
 
 /** Limites do `Input type="number"`, que espelham a validação do backend. */
@@ -88,22 +65,70 @@ export const ESCALA_NUMERICA = { minimo: 1, maximo: 10, passo: 0.01 } as const
  */
 const REGEX_NUMERICO = /^\d{1,2}(\.\d{1,2})?$/
 
+/**
+ * O que a tela diz quando não sabe qual é o modelo da escola.
+ *
+ * Fica aqui, e não em cada componente, para que Lançamentos e Prévia falem a mesma
+ * coisa: são as duas telas que leem o modelo, e um texto diferente em cada uma
+ * faria o mesmo erro parecer dois problemas.
+ */
+export const SEM_MODELO_DE_AVALIACAO =
+  'A API não informou o modelo de avaliação desta escola, então o campo de nota fica indisponível: sem saber se a escala é numérica ou de conceitos, qualquer campo mostrado erraria a turma inteira. Recarregue a página — se o aviso continuar, é a API que está desatualizada.'
+
 /** O modelo pede um número digitado, e não um seletor de rótulos? */
 export function ehEscalaNumerica(modelo: ModeloAvaliacao): boolean {
   return modelo.tipoEscala === TIPO_ESCALA.NUMERICA
 }
 
 /**
- * O modelo de avaliação da escola da competição.
+ * O modelo de avaliação da escola da sala, como a API mandou.
  *
- * O parâmetro existe para marcar a costura: é por ele que a escola entra na
- * conta no dia em que a API expuser `modeloAvaliacao`. Hoje não há o que ler
- * dele, e devolver o padrão é uma escolha declarada, não um esquecimento — por
- * isso fica neste arquivo e não espalhada pelas telas.
+ * Devolve `null` quando a resposta não traz um modelo que a tela saiba mostrar:
+ * escola ausente (a sala ainda está carregando) e `tipoEscala` que não é um dos
+ * dois conhecidos. Nesses casos quem chama mostra `SEM_MODELO_DE_AVALIACAO` em vez
+ * de um campo — é a diferença entre uma tela que avisa e uma que lança conceito
+ * onde a API exige nota de 1 a 10.
+ *
+ * Os níveis vêm ordenados pelo `valorNumerico`, e não na ordem que a API
+ * mandou: `niveis_escala` não tem coluna de ordem, então a ordem do banco é
+ * qualquer uma, e o que diz em que ponto da escala cada rótulo está é o valor que
+ * ele vale. Sem a ordenação, o seletor mudaria de ordem entre duas respostas da
+ * mesma escola.
  */
-export function modeloAvaliacaoDaEscola(escola: EscolaResumo | null | undefined): ModeloAvaliacao {
-  void escola
-  return MODELO_CPS_ETEC
+export function modeloAvaliacaoDaEscola(
+  escola: EscolaResumo | null | undefined,
+): ModeloAvaliacao | null {
+  const tipoEscala = escola?.modeloAvaliacao?.tipoEscala
+
+  if (tipoEscala === TIPO_ESCALA.NUMERICA) {
+    // A escala é a de 1 a 10, digitada, e por isso não tem níveis: um "nível"
+    // aqui seria um valor que a conta não sabe converter.
+    return { tipoEscala: TIPO_ESCALA.NUMERICA, niveis: [], rotulos: [] }
+  }
+
+  if (tipoEscala !== TIPO_ESCALA.CPS_ETEC) return null
+
+  const niveis = [...(escola!.modeloAvaliacao.nivelEscalas ?? [])].sort(
+    (a, b) => a.valorNumerico - b.valorNumerico,
+  )
+
+  /*
+   * Modelo conceitual sem nenhum rótulo é cadastro incompleto, e não um modelo
+   * vazio: o seletor ficaria sem uma única opção e a validação recusaria toda nota
+   * com a mensagem de "escolha um destes rótulos" — uma lista vazia. Sem os
+   * rótulos não há campo que possa ser mostrado, então é `null` como o tipo
+   * desconhecido.
+   */
+  if (niveis.length === 0) return null
+
+  return {
+    tipoEscala: TIPO_ESCALA.CPS_ETEC,
+    niveis: niveis.map((nivel) => ({
+      rotulo: nivel.rotulo,
+      valorNumerico: nivel.valorNumerico,
+    })),
+    rotulos: niveis.map((nivel) => nivel.rotulo),
+  }
 }
 
 /**
@@ -111,7 +136,8 @@ export function modeloAvaliacaoDaEscola(escola: EscolaResumo | null | undefined)
  *
  * Roda no formulário para o erro aparecer no campo da nota antes da ida ao
  * servidor. O backend continua sendo quem decide: ele valida o modelo do banco,
- * que pode não ser o que a tela assumiu, e o erro dele é exibido como está.
+ * e o erro dele é exibido como está. Os dois leem a mesma escala agora, então
+ * Discordar exigiria a troca da escala da escola no meio da sessão.
  */
 export function validarValorNoModelo(
   modelo: ModeloAvaliacao,

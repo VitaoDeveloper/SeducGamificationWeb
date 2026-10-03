@@ -1,5 +1,5 @@
 import { validarNotas } from './notas'
-import { MODELO_CPS_ETEC, MODELO_NUMERICO } from './modelo-avaliacao'
+import { MODELO_CPS_ETEC, MODELO_NUMERICO } from '../../test/modelos-de-avaliacao'
 
 describe('validarNotas', () => {
   it('monta o lote só com os campos preenchidos', () => {

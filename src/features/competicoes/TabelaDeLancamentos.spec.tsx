@@ -14,7 +14,7 @@ import {
   materia,
 } from '../../test/handlers'
 import { formatarSintese, sinteseDaMateria } from '../../lib/sinteseCalculo'
-import { MODELO_CPS_ETEC, MODELO_NUMERICO } from './modelo-avaliacao'
+import { MODELO_CPS_ETEC, MODELO_NUMERICO } from '../../test/modelos-de-avaliacao'
 import { TabelaDeLancamentos } from './TabelaDeLancamentos'
 import type { Lancamento, MateriaComPesos } from './componentes-pontuacao.tipos'
 
@@ -119,6 +119,31 @@ describe('TabelaDeLancamentos', () => {
     }
     expect(within(conceitoDaAna).getByRole('option', { name: 'Sem nota' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Nota de Ana')).not.toBeInTheDocument()
+  })
+
+  it('não monta campo nenhum quando a API não informou o modelo da escola', async () => {
+    server.use(...lancamentosDoComponente([lancamento('cp-1', ANA, 'B')], ALUNOS))
+
+    renderComSessao(
+      <TabelaDeLancamentos
+        componente={COMPONENTE}
+        materia={MATERIA}
+        alunos={ALUNOS}
+        modelo={null}
+        encerrado={false}
+      />,
+    )
+
+    /*
+     * Este é o caminho que evita o bug, e não um detalhe: com um modelo qualquer
+     * inventado, a escola numérica receberia o seletor de conceitos e o
+     * `LancamentosService` recusaria o lote com 400, depois de o professor ter
+     * lançado a turma inteira. Sem modelo, não há o que lançar.
+     */
+    expect(await screen.findByRole('alert')).toHaveTextContent(/não informou o modelo de avaliação/i)
+    expect(screen.queryByLabelText('Nota de Ana')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Conceito de Ana')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /salvar/i })).not.toBeInTheDocument()
   })
 
   it('deixa o campo vazio no aluno sem lançamento, sem travar os outros', async () => {

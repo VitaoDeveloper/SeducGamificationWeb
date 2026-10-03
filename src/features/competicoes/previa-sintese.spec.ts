@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { aluno, grupo, lancamento, materia, materiaFechada, membro } from '../../test/handlers'
-import { MODELO_CPS_ETEC, MODELO_NUMERICO } from './modelo-avaliacao'
+import { MODELO_CPS_ETEC, MODELO_NUMERICO } from '../../test/modelos-de-avaliacao'
 import { calcularPreviaDoBimestre, sinteseDaMateriaPorAluno } from './previa-sintese'
 import type { GrupoComMembros } from './competicoes.tipos'
 import type { Lancamento } from './componentes-pontuacao.tipos'

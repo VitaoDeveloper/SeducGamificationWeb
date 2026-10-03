@@ -7,9 +7,31 @@
  * entra aqui — o dado que não existe para o professor é buscado onde ele está.
  */
 
+/**
+ * A escala da escola, como a API manda dentro de `escola.modeloAvaliacao`.
+ *
+ * `nivelEscalas` vem vazia no modelo numérico — a nota de 1 a 10 é digitada, não
+ * escolhida —, e o que ela traz para o modelo conceitual são os rótulos com o
+ * número que cada um vale. O campo existe porque o formato do lançamento de nota
+ * depende dele (ver `features/competicoes/modelo-avaliacao.ts`).
+ */
+export interface ModeloAvaliacaoDaEscola {
+  tipoEscala: string
+  nivelEscalas: { rotulo: string; valorNumerico: number }[]
+}
+
 export interface EscolaResumo {
   id: string
   nome: string
+  /**
+   * O modelo de avaliação da escola, que decide o campo de nota.
+   *
+   * Vai na escola de propósito, e não numa rota de modelos: `GET /salas` e
+   * `GET /escolas` já são chamadas que a tela faz, e o modelo é o que valida o
+   * lançamento no servidor — mandá-lo junto é o que impede a interface de
+   * adivinhar um modelo e errar o campo de toda a turma.
+   */
+  modeloAvaliacao: ModeloAvaliacaoDaEscola
 }
 
 /** Linha de `GET /salas` e `POST /salas`. */

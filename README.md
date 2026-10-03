@@ -187,14 +187,17 @@ Decisões que valem conhecer:
 
 ### Limites da API que moldam a tela
 
-- **A API não expõe `modeloAvaliacao` da escola.** Não existe rota de modelos de
-  avaliação, e `GET /salas` devolve `escola: { id, nome }` por um `select`
-  explícito que não inclui o campo. `modeloAvaliacaoDaEscola`
-  (`features/competicoes/modelo-avaliacao.ts`) é a costura: devolve o CPS ETEC
-  (`I`, `R`, `B`, `MB`) do seed da API e, quando existir a rota, muda só o corpo
-  dela. Os componentes recebem o modelo por prop, então nada mais muda junto.
-  O `LancamentosService` já valida o modelo por dentro e recusa com 400 valor fora
-  da escala, e esse erro é exibido como a API mandou.
+- **O modelo de avaliação viaja na escola, e a tela não adivinha.** Não existe rota
+  de modelos de avaliação, mas `GET /salas` e `GET /escolas` devolvem a escola com
+  `modeloAvaliacao: { tipoEscala, nivelEscalas }`, e é com esse dado que
+  `modeloAvaliacaoDaEscola` (`features/competicoes/modelo-avaliacao.ts`) monta o
+  modelo da tela — inclusive os `niveis` que a prévia de síntese usa para converter
+  rótulo em número. Os componentes recebem o modelo por prop, então nada mais muda
+  junto, e renderizar e validar leem a mesma escala que o `LancamentosService`
+  valida no banco: campo com a escala errada é exatamente o lançamento que a API
+  recusa com 400. Sem modelo na resposta, Lançamentos e Prévia **não mostram campo
+  nenhum** e avisam que a API está desatualizada — fallback para um modelo fixo
+  errava a escola inteira sem nenhum aviso.
 - **O `GET` de componentes é agrupado por matéria.** Não existe rota de componente
   solto nem listagem por componente: a tela agrupa o que a API já devolve grouped,
   e os lançamentos vêm por componente (`GET
@@ -257,10 +260,11 @@ Decisões que valem conhecer:
 - **Não existe rota de síntese parcial.** O que a prévia faz são N chamadas a
   `GET /componentes-pontuacao/:id/lancamentos`, uma por componente do bimestre, em
   paralelo (`useLancamentosDeComponentes`).
-- **`modeloAvaliacao` continua sem rota.** A conta precisa converter o rótulo
-  conceito em número, e o modelo que a tela assume passou a carregar também
-  `niveis` (`I` = 3, `R` = 5, `B` = 8, `MB` = 10) — os do seed da API. Quando a
-  rota existir, o corpo de `modeloAvaliacaoDaEscola` muda e nada mais junto.
+- **`modeloAvaliacao` não tem rota própria, e não precisa de uma.** A conta precisa
+  converter o rótulo conceito em número, e esse número vem da escola: o modelo
+  carrega `niveis` (`I` = 3, `R` = 5, `B` = 8, `MB` = 10 no seed) direto do
+  `nivelEscalas` que a API manda, ordenados por `valorNumerico` — a ordem do banco
+  não tem sentido para a escala.
 - **Nada é gravado.** A prévia não tem salvamento; a síntese só existe depois do
   encerramento, e vem do backend.
 

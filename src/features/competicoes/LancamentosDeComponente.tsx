@@ -17,7 +17,12 @@ export interface LancamentosDeComponenteProps {
   componenteId: string | undefined
   onComponenteChange: (componenteId: string) => void
   alunos: Aluno[]
-  modelo: ModeloAvaliacao
+  /**
+   * Modelo da escola, repassado à tabela sem decisão: ela é quem escolhe o
+   * formato do campo, e o mesmo modelo valida a nota. `null` quando a API não
+   * informou o modelo da escola.
+   */
+  modelo: ModeloAvaliacao | null
 }
 
 /**

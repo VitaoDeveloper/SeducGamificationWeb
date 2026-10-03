@@ -15,7 +15,7 @@ import {
   materiaFechada,
   membro,
 } from '../../test/handlers'
-import { MODELO_NUMERICO } from './modelo-avaliacao'
+import { MODELO_NUMERICO } from '../../test/modelos-de-avaliacao'
 import { PreviaDaSintese } from './PreviaDaSintese'
 import { AVISO_DE_PREVIA } from './TabelaDeLancamentos'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'

@@ -32,6 +32,7 @@ import type {
   RespostaDoDesempateAutomatico,
 } from '../features/competicoes/desempate.tipos'
 import { TIPO_RANKING, TOTAL_DE_BIMESTRES } from '../features/rankings/rankings.tipos'
+import { MODELO_CPS_ETEC_DA_API, MODELO_NUMERICO_DA_API } from './modelos-de-avaliacao'
 import type {
   ItemDeAluno,
   ItemDeGrupo,
@@ -139,8 +140,25 @@ export function trocarSenhaRecusada() {
 
 /* ------------------------------------------------------------------ salas -- */
 
-export const ESCOLA_A: EscolaResumo = { id: 'escola-a', nome: 'Escola Estadual de Exemplo' }
-export const ESCOLA_B: EscolaResumo = { id: 'escola-b', nome: 'Escola Técnica Dutra' }
+/*
+ * As duas escolas do professor de teste, uma de cada modelo de avaliação.
+ *
+ * `ESCOLA_A` é conceitual (o CPS ETEC, que é o modelo da escola do seed da API) e
+ * `ESCOLA_B` é numérica. Ter as duas na mesma lista é o que permite escrever o
+ * teste da troca de contexto: o campo de nota tem que acompanhar a escola que está
+ * em exibição, e um cenário com um modelo só não distinguiria "o campo atualizou"
+ * de "o campo nunca muda".
+ */
+export const ESCOLA_A: EscolaResumo = {
+  id: 'escola-a',
+  nome: 'Escola Estadual de Exemplo',
+  modeloAvaliacao: MODELO_CPS_ETEC_DA_API,
+}
+export const ESCOLA_B: EscolaResumo = {
+  id: 'escola-b',
+  nome: 'Escola Técnica Dutra',
+  modeloAvaliacao: MODELO_NUMERICO_DA_API,
+}
 
 /** Sala pronta, com a escola já embutida como a API devolve. */
 export function sala(

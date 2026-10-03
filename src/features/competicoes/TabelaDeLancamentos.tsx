@@ -7,7 +7,7 @@ import { lancarNota, lancarNotasEmLote } from './componentes-pontuacao.api'
 import { useLancamentos, useLancamentosDeComponentes } from './componentes-pontuacao.hooks'
 import { sinteseDaMateriaPorAluno } from './previa-sintese'
 import { validarNotas } from './notas'
-import { ESCALA_NUMERICA, ehEscalaNumerica } from './modelo-avaliacao'
+import { ESCALA_NUMERICA, SEM_MODELO_DE_AVALIACAO, ehEscalaNumerica } from './modelo-avaliacao'
 import type { NotaPendente } from './previa-sintese'
 import type { ModeloAvaliacao } from './modelo-avaliacao'
 import type { NotaDigitada } from './notas'
@@ -30,8 +30,12 @@ export interface TabelaDeLancamentosProps {
   materia: MateriaComPesos
   /** Todos os matriculados na sala: a nota em branco é aluno sem lançamento. */
   alunos: Aluno[]
-  /** Modelo da escola — define se o campo é número ou seletor de rótulos. */
-  modelo: ModeloAvaliacao
+  /**
+   * Modelo da escola — define se o campo é número ou seletor de rótulos, e é o
+   * mesmo que valida a nota. `null` quando a API não informou o modelo: a grade
+   * não é montada, e a tela avisa.
+   */
+  modelo: ModeloAvaliacao | null
   /** Bimestre encerrado: os campos e os salvamentos ficam bloqueados. */
   encerrado: boolean
 }
@@ -108,6 +112,35 @@ export function TabelaDeLancamentos({
     .sort()
   const notasDosIrmãos = useLancamentosDeComponentes(idsDosIrmãos)
 
+  /**
+   * O modelo é a fonte única do formato do campo e da validação: os dois saem
+   * daqui, e nenhum dos dois adivinha. Sem ele, a grade não é montada — mostrar um
+   * campo com a escala errada erraria a turma inteira de uma vez, e o professor
+   * descobriria isso só quando a API recusasse o lote.
+   *
+   * A guarda vem antes de qualquer uso do modelo, inclusive da prévia da linha e das
+   * funções de salvar: elas validam e calculam com o modelo, e nenhuma das duas
+   * pode rodar sem ele.
+   */
+  if (!modelo) {
+    return (
+      <Alert tone="erro" role="alert">
+        {SEM_MODELO_DE_AVALIACAO}
+      </Alert>
+    )
+  }
+
+  /*
+   * O modelo a partir daqui, depois da guarda.
+   *
+   * Nome próprio porque as funções abaixo são declarações — que o TypeScript
+   * considera disponíveis desde o topo do componente, mesmo escritas depois da
+   * guarda. Ler `modeloDaEscola` é o que deixa o compilador exigir o modelo onde
+   * ele é usado, em vez de repetir `modelo!` nas três vezes em que a conta e a
+   * validação dependem dele.
+   */
+  const modeloDaEscola: ModeloAvaliacao = modelo
+
   function valorDe(alunoId: string): string {
     return editados[alunoId] ?? salvosPorAluno.get(alunoId) ?? ''
   }
@@ -121,10 +154,19 @@ export function TabelaDeLancamentos({
     return alunos.map((aluno) => ({ alunoId: aluno.id, valor: valorDe(aluno.id) }))
   }
 
+  if (alunos.length === 0) {
+    return (
+      <Alert tone="info">
+        Nenhum aluno matriculado nesta sala ainda. Cadastre os alunos antes de lançar
+        notas.
+      </Alert>
+    )
+  }
+
   /**
    * A síntese da matéria por aluno, com o que está no campo agora.
    *
-   * São as notas salvas de todos os componentes da matéria — as deste, que já
+   * São as notas salvas de todos os componentes da matéria — as destes, que já
    * estão em `lancamentos`, e as dos irmãos, que vieram em `notasDosIrmãos` — com
    * o que foi digitado por cima. É o que `sinteseDaMateriaPorAluno` espera, e a
    * lista de `pendentes` sai do próprio estado `editados`, que é a única fonte
@@ -144,7 +186,7 @@ export function TabelaDeLancamentos({
       materia,
       lancamentosPorComponente,
       alunos,
-      modelo,
+      modelo: modeloDaEscola,
       pendentes,
     })
   }
@@ -160,7 +202,7 @@ export function TabelaDeLancamentos({
   async function salvarLote() {
     if (enviando) return
 
-    const validacao = validarNotas(notasDigitadas(), modelo)
+    const validacao = validarNotas(notasDigitadas(), modeloDaEscola)
     setErros(Object.fromEntries(validacao.erros.map((erro) => [erro.alunoId, erro.erro])))
 
     if (!validacao.valido) {
@@ -192,7 +234,7 @@ export function TabelaDeLancamentos({
   async function salvarLinha(aluno: Aluno) {
     if (salvandoAluno) return
 
-    const validacao = validarNotas([{ alunoId: aluno.id, valor: valorDe(aluno.id) }], modelo)
+    const validacao = validarNotas([{ alunoId: aluno.id, valor: valorDe(aluno.id) }], modeloDaEscola)
 
     if (!validacao.valido) {
       setErros((atuais) => ({
@@ -218,16 +260,7 @@ export function TabelaDeLancamentos({
     }
   }
 
-  if (alunos.length === 0) {
-    return (
-      <Alert tone="info">
-        Nenhum aluno matriculado nesta sala ainda. Cadastre os alunos antes de lançar
-        notas.
-      </Alert>
-    )
-  }
-
-  const numerico = ehEscalaNumerica(modelo)
+  const numerico = ehEscalaNumerica(modeloDaEscola)
 
   const linhas: LinhaDeLancamento[] = alunos.map((aluno) => {
     const valor = valorDe(aluno.id)

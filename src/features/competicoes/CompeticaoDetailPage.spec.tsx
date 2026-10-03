@@ -1,13 +1,14 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
-import { Route, Routes } from 'react-router-dom'
+import { Link, Route, Routes } from 'react-router-dom'
 import { server } from '../../test/server'
 import { renderComSessao } from '../../test/render'
 import { gravarSessao, TIPO_USUARIO } from '../../lib/sessao'
 import {
   API,
   ESCOLA_A,
+  ESCOLA_B,
   PROFESSOR_DE_TESTE,
   TOKEN_DE_TESTE,
   aluno,
@@ -234,9 +235,9 @@ describe('CompeticaoDetailPage', () => {
 
   it('abre a prévia da síntese na aba própria, com as notas já lançadas', async () => {
     const pessoa = userEvent.setup()
-    // A escola do cenário não tem modelo exposto pela API, então a tela assume o
-    // CPS ETEC: o "B" da Ana vale 8 na conta. Como o componente pesa 100%, a
-    // síntese da matéria é a própria nota.
+    // A escola do cenário é conceitual — o modelo vem da API —, então o "B" da Ana
+    // vale 8 na conta. Como o componente pesa 100%, a síntese da matéria é a
+    // própria nota.
     server.use(
       ...cenario(),
       ...componentesDoBimestre([lancamento('mat-1-cp1', ALUNOS[0]!, 'B')]),
@@ -303,8 +304,8 @@ describe('CompeticaoDetailPage', () => {
     await pessoa.click(screen.getByRole('tab', { name: 'Lançamentos' }))
     await pessoa.selectOptions(await screen.findByLabelText('Componente de pontuação'), 'mat-1-cp1')
 
-    // A escola do cenário não tem modelo exposto pela API, então a tela assume o
-    // CPS ETEC e o campo de nota aparece como seletor de conceitos.
+    // A escola do cenário é conceitual, e é o modelo que a API manda que decide o
+    // campo: o seletor de conceitos, e não um palpite da tela.
     expect((await screen.findAllByLabelText('Conceito de Ana')).length).toBeGreaterThan(0)
 
     // Leva para o b2, que está encerrado e não tem componente: a escolha do b1
@@ -312,6 +313,75 @@ describe('CompeticaoDetailPage', () => {
     await pessoa.selectOptions(screen.getByLabelText('Bimestre'), 'b2')
 
     await waitFor(() => expect(screen.getByLabelText('Componente de pontuação')).toHaveValue(''))
+    expect(screen.queryAllByLabelText('Conceito de Ana')).toHaveLength(0)
+  })
+
+  it('troca o campo de nota com o modelo da escola quando o contexto muda de sala', async () => {
+    const pessoa = userEvent.setup()
+    const SALA_NUMERICA = sala({ id: 'sala-2', nome: '1º DS', escola: ESCOLA_B })
+    const LECIONAMENTO_NUMERICO = lecionamento({ id: 'lec-2', salaId: SALA_NUMERICA.id })
+    const COMPETICAO_NUMERICA = competicao({
+      id: 'comp-2',
+      nome: 'Copa da Escola Numérica',
+      lecionamentoId: LECIONAMENTO_NUMERICO.id,
+    })
+    const BIMESTRE_NUMERICO = bimestre({
+      id: 'n1',
+      competicaoId: COMPETICAO_NUMERICA.id,
+      numero: 1,
+      situacao: SITUACAO_BIMESTRE.ABERTO,
+    })
+
+    /*
+     * Duas escolas de escalas diferentes no mesmo professor é o cenário do bug: a
+     * escola do `COMPETICAO` é conceitual e a da outra competição é numérica. A
+     * troca de contexto precisa trocar o campo junto, senão o professor lança
+     * conceito na escola que só aceita número e a API recusa o lote depois.
+     */
+    server.use(
+      http.get(`${API}/competicoes/:id`, ({ params }) =>
+        HttpResponse.json(
+          String(params.id) === COMPETICAO_NUMERICA.id
+            ? { ...COMPETICAO_NUMERICA, bimestres: [BIMESTRE_NUMERICO] }
+            : { ...COMPETICAO, bimestres: BIMESTRES },
+        ),
+      ),
+      ...salasDoProfessor(
+        [SALA, SALA_NUMERICA],
+        { [SALA.id]: [LECIONAMENTO], [SALA_NUMERICA.id]: [LECIONAMENTO_NUMERICO] },
+      ),
+      http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
+      grupos(),
+      ...desempateDaCompeticao([]),
+      ...componentesDoBimestre(),
+    )
+    abrirSessao()
+
+    renderComSessao(
+      <>
+        <Link to={rotaDaCompeticao(COMPETICAO_NUMERICA.id)}>Ir para a escola numérica</Link>
+        <Routes>
+          <Route path={ROTA_COMPETICAO_DETALHE} element={<CompeticaoDetailPage />} />
+        </Routes>
+      </>,
+      rotaDaCompeticao(COMPETICAO.id),
+    )
+
+    await screen.findByRole('heading', { name: 'Copa do Conhecimento' })
+    await pessoa.click(screen.getByRole('tab', { name: 'Lançamentos' }))
+    await pessoa.selectOptions(await screen.findByLabelText('Componente de pontuação'), 'mat-1-cp1')
+
+    // A primeira escola é conceitual: o campo é o seletor de rótulos do CPS ETEC,
+    // que é o que a API da escola manda.
+    expect((await screen.findAllByLabelText('Conceito de Ana')).length).toBeGreaterThan(0)
+
+    await pessoa.click(screen.getByRole('link', { name: 'Ir para a escola numérica' }))
+
+    // Mesma tela e mesma sessão, outra escola: o campo vira o número de 1 a 10 sem
+    // recarregar a página, porque o modelo é lido da sala que está em exibição.
+    await waitFor(() =>
+      expect(screen.getAllByLabelText('Nota de Ana')[0]).toHaveAttribute('type', 'number'),
+    )
     expect(screen.queryAllByLabelText('Conceito de Ana')).toHaveLength(0)
   })
 })

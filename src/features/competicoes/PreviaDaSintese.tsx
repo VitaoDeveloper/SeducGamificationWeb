@@ -6,6 +6,7 @@ import { calcularPreviaDoBimestre } from './previa-sintese'
 import { AVISO_DE_PREVIA } from './TabelaDeLancamentos'
 import { rotuloDoBimestre } from './bimestres'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
+import { SEM_MODELO_DE_AVALIACAO } from './modelo-avaliacao'
 import type { PreviaDoAluno, PreviaDoGrupo } from './previa-sintese'
 import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
 import type { ModeloAvaliacao } from './modelo-avaliacao'
@@ -21,7 +22,13 @@ export interface PreviaDaSinteseProps {
   alunos: Aluno[]
   /** Grupos com a composição deste bimestre. */
   grupos: GrupoComMembros[]
-  modelo: ModeloAvaliacao
+  /**
+   * Modelo da escola, o mesmo que decide o campo de lançamento e valida a nota.
+   * `null` quando a API não informou o modelo: sem a escala, a conta da prévia não
+   * sabe converter um rótulo em número, e o painel avisa em vez de mostrar um
+   * número que a API não vai gravar.
+   */
+  modelo: ModeloAvaliacao | null
 }
 
 /**
@@ -117,6 +124,19 @@ export function PreviaDaSintese({ bimestre, alunos, grupos, modelo }: PreviaDaSi
     return (
       <Alert tone="info">
         Nenhum aluno matriculado nesta sala ainda, então não há o que calcular.
+      </Alert>
+    )
+  }
+
+  /*
+   * O modelo é lido depois do "encerrado" de propósito: com o bimestre fechado quem
+   * manda no número é a síntese que a API gravou, e ela não passa por esta conta —
+   * um modelo desconhecido não tem o que atrapalhar ali.
+   */
+  if (!modelo) {
+    return (
+      <Alert tone="erro" role="alert">
+        {SEM_MODELO_DE_AVALIACAO}
       </Alert>
     )
   }

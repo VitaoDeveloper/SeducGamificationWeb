@@ -72,8 +72,7 @@ export type {
 } from './previa-sintese'
 export {
   ESCALA_NUMERICA,
-  MODELO_CPS_ETEC,
-  MODELO_NUMERICO,
+  SEM_MODELO_DE_AVALIACAO,
   TIPO_ESCALA,
   ehEscalaNumerica,
   modeloAvaliacaoDaEscola,

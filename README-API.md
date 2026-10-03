@@ -401,8 +401,17 @@ curl http://localhost:3000/escolas \
 
 ```json
 [
-  { "id": "...", "nome": "Escola Estadual de Exemplo" },
-  { "id": "...", "nome": "ETEC João Gomes de Araújo" }
+  {
+    "id": "...",
+    "nome": "Escola Estadual de Exemplo",
+    "modeloAvaliacao": { "tipoEscala": "CPS_ETEC", "nivelEscalas": [
+      { "rotulo": "I", "valorNumerico": 3 },
+      { "rotulo": "R", "valorNumerico": 5 },
+      { "rotulo": "B", "valorNumerico": 8 },
+      { "rotulo": "MB", "valorNumerico": 10 }
+    ] }
+  },
+  { "id": "...", "nome": "EE Monsenhor João Alves", "modeloAvaliacao": { "tipoEscala": "NUMERICA", "nivelEscalas": [] } }
 ]
 ```
 
@@ -410,6 +419,11 @@ Exige o perfil **PROFESSOR** (`403` para aluno). A consulta sai da tabela
 `vinculos_professores`, e não de `salas`: é o vínculo que define o alcance do professor, e
 uma escola sem nenhuma sala precisa aparecer — é o que permite criar a primeira turma.
 Sem paginação: o universo é o número de vínculos do professor.
+
+Cada escola vem com `modeloAvaliacao`, o mesmo que `POST /salas`, `GET /salas` e os
+lançamentos devolvem: é com ele que a interface monta o campo de nota e valida o
+lançamento, e um cliente que chute a escala mostra conceitos onde a escola só aceita
+número.
 
 ### 11.3 Salas
 
@@ -425,9 +439,13 @@ Validações: `nome` obrigatório, `anoLetivo` entre 2000 e 2100, `escolaId` UUI
 
 ```json
 [
-  { "id": "...", "nome": "2º DS", "anoLetivo": 2026, "escolaId": "...", "professorCriadorId": "...", "escola": { "id": "...", "nome": "Escola Estadual de Exemplo" } }
+  { "id": "...", "nome": "2º DS", "anoLetivo": 2026, "escolaId": "...", "professorCriadorId": "...", "escola": { "id": "...", "nome": "Escola Estadual de Exemplo", "modeloAvaliacao": { "tipoEscala": "CPS_ETEC", "nivelEscalas": [{ "rotulo": "I", "valorNumerico": 3 }, { "rotulo": "R", "valorNumerico": 5 }, { "rotulo": "B", "valorNumerico": 8 }, { "rotulo": "MB", "valorNumerico": 10 }] } } }
 ]
 ```
+
+A `escola` embutida carrega o `modeloAvaliacao` que o `POST /salas` devolve e o
+`GET /escolas`: é o modelo que decide o formato do lançamento e contra o qual o
+`POST .../lancamentos` valida.
 
 ### 11.4 Lecionamentos (inscrição do professor na sala)
 

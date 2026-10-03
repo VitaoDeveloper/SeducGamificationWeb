@@ -528,7 +528,13 @@ export function CompeticaoDetailPage() {
             />
           ) : null}
 
-          {aba === 'lancamentos' && bimestreAtual ? (
+          {/*
+           * Lançamentos e prévia esperam o contexto carregar, e o motivo é o
+           * modelo: o campo de nota é escolhido por ele, então renderizar a aba
+           * antes de a sala chegar mostraria "a API não informou o modelo de
+           * avaliação" — uma acusação falsa — durante cada troca de contexto.
+           */}
+          {aba === 'lancamentos' && bimestreAtual && !contexto.carregando ? (
             <LancamentosDeComponente
               bimestre={bimestreAtual}
               componenteId={componenteEscolhido}
@@ -553,7 +559,7 @@ export function CompeticaoDetailPage() {
             <SintesesOficiais resultado={resultadoDoBimestre} />
           ) : null}
 
-          {aba === 'previa' && bimestreAtual && !resultadoDoBimestre && !alunos.carregando ? (
+          {aba === 'previa' && bimestreAtual && !resultadoDoBimestre && !alunos.carregando && !contexto.carregando ? (
             <PreviaDaSintese
               bimestre={bimestreAtual}
               alunos={alunos.dados ?? []}

@@ -17,7 +17,7 @@ import {
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre } from './competicoes.tipos'
 import { LancamentosDeComponente } from './LancamentosDeComponente'
-import { MODELO_NUMERICO } from './modelo-avaliacao'
+import { MODELO_NUMERICO } from '../../test/modelos-de-avaliacao'
 
 const ANA = aluno({ id: 'a1', nome: 'Ana', codigoMatricula: '26010' })
 
