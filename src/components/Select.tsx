@@ -60,7 +60,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         aria-hidden
         viewBox="0 0 20 20"
         fill="currentColor"
-        className="text-neutral-500 pointer-events-none absolute top-1/2 right-3 -translate-y-1/2"
+        // O `size-4` é obrigatório: sem largura e altura próprias, o navegador
+        // desenha o svg no tamanho padrão de elemento substituído (300×150) e a
+        // seta invade o campo inteiro.
+        className="text-neutral-500 pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
       >
         <path
           fillRule="evenodd"
