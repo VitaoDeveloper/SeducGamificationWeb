@@ -29,7 +29,7 @@ export function PageHeader({ title, description, action, className }: PageHeader
           <p className="text-neutral-500 mt-1.5 text-sm">{description}</p>
         ) : null}
       </div>
-      {action ? <div className="flex shrink-0 gap-2">{action}</div> : null}
+      {action ? <div className="flex flex-wrap shrink-0 gap-2 justify-end">{action}</div> : null}
     </header>
   )
 }

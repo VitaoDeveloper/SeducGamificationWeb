@@ -173,7 +173,7 @@ export function GraficoDeSintese({
   })
 
   return (
-    <figure className="space-y-3">
+    <figure className="relative space-y-3 overflow-clip">
       <figcaption className="space-y-1">
         <span className="text-neutral-700 block text-sm font-medium">{titulo}</span>
         <span className="text-neutral-500 block text-xs">{descricao}</span>

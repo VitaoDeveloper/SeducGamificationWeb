@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+﻿import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { delay, http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -145,14 +145,14 @@ describe('BaixarPdf', () => {
     // esperasse o fim perderia justamente o estado que se quer ver.
     await userEvent.click(screen.getByRole('button', { name: 'Baixar PDF' }))
 
-    const carregando = await screen.findByRole('button', { name: 'Gerando o PDF…' })
-    expect(carregando).toBeDisabled()
+    const carregando = await screen.findByRole('button', { name: 'Gerando o PDF...' })
+    expect(carregando).toHaveAttribute("aria-disabled", "true")
     expect(carregando).toHaveAttribute('aria-busy', 'true')
     expect(download.baixados).toHaveLength(0)
 
     // E o clique de novo não dispara uma segunda geração: o botão travado é o que
     // impede o professor de encher a fila de arquivos iguais.
-    expect(carregando).not.toBeEnabled()
+    expect(carregando).toHaveAttribute("aria-disabled", "true")
 
     const pronto = await screen.findByRole('button', { name: 'Baixar PDF' })
     expect(pronto).toBeEnabled()
@@ -227,3 +227,4 @@ describe('BaixarPdf', () => {
     expect(download.baixados).toHaveLength(0)
   })
 })
+

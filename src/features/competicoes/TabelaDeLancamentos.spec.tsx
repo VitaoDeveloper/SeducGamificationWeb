@@ -284,13 +284,13 @@ describe('TabelaDeLancamentos', () => {
     await screen.findByLabelText('Nota de Ana')
     // Sem edição, nenhum botão de linha pode salvar: sem isso, um clique acidental
     // gravaria uma linha vazia por cima do que já estava no banco.
-    expect(within(linhaDe('Ana')).getByRole('button', { name: 'Salvar' })).toBeDisabled()
-    expect(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    expect(within(linhaDe('Ana')).getByRole('button', { name: 'Salvar' })).toHaveAttribute('aria-disabled', 'true')
+    expect(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' })).toHaveAttribute('aria-disabled', 'true')
 
     await pessoa.type(screen.getByLabelText('Nota de Bia'), '9')
 
     expect(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' })).toBeEnabled()
-    expect(within(linhaDe('Ana')).getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    expect(within(linhaDe('Ana')).getByRole('button', { name: 'Salvar' })).toHaveAttribute('aria-disabled', 'true')
 
     await pessoa.click(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' }))
 
@@ -344,7 +344,7 @@ describe('TabelaDeLancamentos', () => {
 
     expect(await screen.findByLabelText('Nota de Ana')).toBeDisabled()
     expect(screen.getByLabelText('Nota de Bia')).toBeDisabled()
-    expect(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' })).toBeDisabled()
+    expect(within(linhaDe('Bia')).getByRole('button', { name: 'Salvar' })).toHaveAttribute('aria-disabled', 'true')
     // O salvamento em lote some por inteiro em vez de ficar um botão morto.
     expect(screen.queryByRole('button', { name: 'Salvar lançamentos' })).not.toBeInTheDocument()
     expect(

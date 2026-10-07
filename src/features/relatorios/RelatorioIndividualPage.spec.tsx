@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+﻿import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach } from 'vitest'
 import { Route, Routes } from 'react-router-dom'
@@ -177,3 +177,4 @@ describe('RelatorioIndividualPage', () => {
     expect(download?.baixados[0]?.nomeDoArquivo).toBe('relatorio-individual-ana-souza.pdf')
   })
 })
+

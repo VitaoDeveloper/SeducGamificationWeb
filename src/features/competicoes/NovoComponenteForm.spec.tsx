@@ -159,6 +159,6 @@ describe('NovoComponenteForm', () => {
     )
 
     expect(screen.getByRole('option', { name: 'Nenhuma matéria no lecionamento' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Criar componente' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Criar componente' })).toHaveAttribute('aria-disabled', 'true')
   })
 })

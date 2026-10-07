@@ -113,6 +113,10 @@ export async function buscarRelatorioComparativoDoGrupo(
  * PDF (`relatorios.pdf.ts`) e essa função é o único ponto onde as duas se
  * encontram. Quem chama entrega o resultado ao navegador e não sabe de onde o
  * nome saiu.
+ *
+ * Limitação: o PDF inteiro é carregado em memória como Blob (responseType 'blob'),
+ * sem streaming nem progresso. Isso é aceitável hoje; migrar exigiria mudanças
+ * mais amplas (axios/streaming) e tratamento de URL de objeto.
  */
 export interface PdfBaixado {
   blob: Blob
@@ -202,6 +206,14 @@ function caminhoDoPdf(relatorio: Relatorio, prefixo: string): string {
  * `.pdf` é o pior desfecho possível — um arquivo que existe, que abre, e que não
  * é o relatório. Um `Content-Type` que não seja `application/pdf`, ou um corpo
  * vazio, viram erro de verdade, com mensagem na tela e a página de pé.
+ *
+ * Pontos cegos (trade-offs conscientes):
+ * - Se `Content-Type` vier ausente, não rejeitamos. Muitos proxies transparentes
+ *   não repassam esse header; rejeitar por isso geraria falso negativo.
+ * - A verificação é apenas por header. `application/pdf` com corpo inválido passa
+ *   aqui — detectar validade real exigiria parsear o PDF, o que não cabe no front.
+ * - `blob.size` depende de termos realmente um Blob (garantido por `responseType: 'blob'`
+ *   nesta chamada). Ainda assim é uma checagem defensiva.
  */
 function conferirQueEhPdf(blob: Blob, headers: Record<string, unknown>): void {
   const tipo = String(headers['content-type'] ?? '')

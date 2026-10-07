@@ -168,7 +168,7 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
           <Button
             type="submit"
             loading={enviando}
-            loadingText="Criando…"
+            loadingText="Criando..."
             disabled={semEscolas}
           >
             Criar sala

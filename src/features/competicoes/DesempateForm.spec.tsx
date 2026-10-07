@@ -291,7 +291,7 @@ describe('desempate', () => {
     expect(
       await within(modal).findByText(/Cada posição só pode valer para uma equipe\./),
     ).toBeInTheDocument()
-    expect(within(modal).getByRole('button', { name: 'Salvar esta ordem' })).toBeDisabled()
+    expect(within(modal).getByRole('button', { name: 'Salvar esta ordem' })).toHaveAttribute('aria-disabled', 'true')
     expect(gravados).toBe(0)
   })
 

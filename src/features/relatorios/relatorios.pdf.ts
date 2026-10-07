@@ -36,6 +36,9 @@ import type { TipoDeRelatorio } from './relatorios.tipos'
  * vira `relatorio` e `comparativo-grupos` vira `relatorio-comparativo`. São as
  * rotas que a API montou, e por isso a tabela é o único lugar onde a correspondência
  * está escrita — nenhum outro arquivo sabe dela.
+ *
+ * Nota (#15): a exaustividade aqui é útil. Atenção à duplicidade com os handlers de teste
+ * (`src/test/handlers.ts`) — divergências entre essas tabelas não são detectadas pelo compilador.
  */
 export const PREFIXO_DO_PDF: Record<TipoDeRelatorio, string> = {
   individual: 'relatorio-individual',
@@ -138,15 +141,18 @@ const ORDINAIS: Record<string, string> = {
 function achatar(nome: string | null | undefined): string {
   if (!nome) return ''
 
-  return nome
-    .replace(/[ºª]/g, (ordinal) => ORDINAIS[ordinal] ?? '')
+  const LIMITA_SLUG = 120
+  const achatado = nome
+    .replace(/[ªº]/g, (ordinal) => ORDINAIS[ordinal] ?? '')
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
 
+  if (achatado.length <= LIMITA_SLUG) return achatado
+  return achatado.slice(0, LIMITA_SLUG).replace(/-+$/, '')
+}
 /* -------------------------------------------------------------- o download -- */
 
 /**
@@ -161,6 +167,9 @@ function achatar(nome: string | null | undefined): string {
  * A revogação vai no `finally`: um navegador que recusou o clique (política de
  * segurança) não pode deixar o blob pendurado, e o erro de quem chamou — se
  * houver — é mais interessante do que uma URL vazada.
+ *
+ * A revogação é adiada (5s) para reduzir o risco de o download ser interrompido
+ * em alguns navegadores (WebKit) ao revogar imediatamente após o clique.
  */
 export function dispararDownload(blob: Blob, nomeDoArquivo: string): void {
   const url = URL.createObjectURL(blob)

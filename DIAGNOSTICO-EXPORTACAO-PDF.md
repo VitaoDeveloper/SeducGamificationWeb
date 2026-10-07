@@ -284,3 +284,21 @@ Não foram verificados, por não haver ambiente:
 - comportamento de download em navegador real (itens 6, 7 e 8 dependem disso);
 - layout em viewport estreito (item 10);
 - a decisão de produto sobre o aluno ver o botão: a API permite aluno no próprio relatório (`README-API.md:652`), e o dashboard do aluno leva às mesmas telas, então o botão aparece para ele — o plano (`docs/11-etapa-exportacao-pdf.md:13`) diz "cada uma das quatro páginas", sem distinguir perfil.
+## 17. Bloqueios externos (CORS / API)
+
+- **#1 - Content-Disposition não é exposto:** Para que o navegador enxergue Content-Disposition via axios, a API precisa retornar Access-Control-Expose-Headers: Content-Disposition nas 4 rotas .pdf. Sem isso, headers['content-disposition'] não chega ao front mesmo com CORS habilitado.
+- **Impacto prático:** Hoje o front usa nome montado como fallback (
+omeDoArquivoDoPdf). Isso mantém o download funcional.
+- **Ação:** Cobrar do backend esse cabeçalho. Enquanto não vier, o comportamento atual é aceitável.
+
+## 18. Decisões aplicadas nesta revisão
+
+- #1 registrado como bloqueio externo (CORS/Expose-Headers).
+- #2,#4: slug sanitizado + truncado (120) e remoção de não-ASCII remanescentes.
+- #3: filename vindo do Content-Disposition sanitizado.
+- #6: revokeObjectURL adiado (5s).
+- #7,#9: Button não usa disabled durante loading; usa aria-disabled/aria-busy + tabIndex -1; impede clique.
+- #8: spinner ajustado por variant (outline usa cores primárias).
+- #10: PageHeader actions com flex-wrap + justify-end.
+- #11: pontos cegos documentados em conferirQueEhPdf.
+- #5,#15: limitações/observações registradas.

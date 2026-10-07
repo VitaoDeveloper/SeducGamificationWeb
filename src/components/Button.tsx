@@ -57,13 +57,22 @@ export function Button({
   return (
     <button
       type={type}
-      disabled={disabled || loading}
+      disabled={disabled || loading ? undefined : disabled}
+      aria-disabled={disabled || loading || undefined}
       aria-busy={loading || undefined}
+      tabIndex={(disabled || loading) ? -1 : undefined}
+      onClick={(e) => {
+        if (disabled || loading) {
+          e.preventDefault()
+          return
+        }
+        props.onClick?.(e)
+      }}
       className={cn(
         'inline-flex items-center justify-center rounded-full font-medium',
         'transition-colors duration-150',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600',
-        'disabled:cursor-not-allowed disabled:opacity-55',
+        (disabled || loading) && 'cursor-not-allowed opacity-55',
         VARIANTES[variant],
         TAMANHOS[size],
         fullWidth && 'w-full',
@@ -72,7 +81,14 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <Spinner size="sm" className="border-white/40 border-t-white" />
+        <Spinner
+          size="sm"
+          className={cn(
+            variant === 'primary' || variant === 'secondary'
+              ? 'border-white/40 border-t-white'
+              : 'border-primary-300 border-t-primary-700',
+          )}
+        />
       ) : (
         leadingIcon
       )}

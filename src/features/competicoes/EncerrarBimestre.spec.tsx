@@ -211,7 +211,7 @@ describe('Encerramento de bimestre', () => {
     // O b2 já está encerrado: a ação irreversível não pode ser re-disparada.
     await userEvent.setup().selectOptions(screen.getByLabelText('Bimestre'), 'b2')
 
-    await waitFor(() => expect(botaoDeEncerrar()).toBeDisabled())
+    await waitFor(() => expect(botaoDeEncerrar()).toHaveAttribute('aria-disabled', 'true'))
     expect(botaoDeEncerrar()).toHaveAttribute('title', '2º Bimestre já está encerrado.')
   })
 
@@ -297,7 +297,7 @@ describe('Encerramento de bimestre', () => {
     // de um palpite local.
     await waitFor(() => expect(screen.getAllByText('Encerrado')).toHaveLength(4))
     expect(screen.queryByText('Aberto')).not.toBeInTheDocument()
-    await waitFor(() => expect(botaoDeEncerrar()).toBeDisabled())
+    await waitFor(() => expect(botaoDeEncerrar()).toHaveAttribute('aria-disabled', 'true'))
 
     // Etapa 04: a composição dos grupos do bimestre fechado é só de leitura.
     await pessoa.click(screen.getByRole('tab', { name: 'Grupos' }))

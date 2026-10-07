@@ -126,6 +126,7 @@ describe('NovaSalaForm', () => {
      * envio possível — e o aviso aponta o mantenedor, que é quem faz o vínculo.
      */
     expect(screen.getByText(/nenhuma escola está vinculada ao seu usuário/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /criar sala/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /criar sala/i })).toHaveAttribute("aria-disabled", "true")
   })
 })
+
