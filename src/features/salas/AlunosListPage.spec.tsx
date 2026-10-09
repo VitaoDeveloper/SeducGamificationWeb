@@ -266,4 +266,93 @@ describe('AlunosListPage', () => {
     expect(await screen.findByText('Informe o nome do aluno.')).toBeInTheDocument()
     expect(chamouOCadastro).toBe(false)
   })
+
+  it('edita o nome do aluno em um modal e reflete na listagem', async () => {
+    const pessoa = userEvent.setup()
+    const lista = [MARIA]
+
+    server.use(
+      ...paginaCom(lista),
+      http.patch(`${API}/alunos/:id`, async ({ request }) => {
+        const { nome } = (await request.json()) as { nome: string }
+        lista[0] = { ...lista[0]!, nome }
+        return HttpResponse.json(lista[0])
+      }),
+    )
+    abrirSessao()
+
+    renderizarAlunos()
+    await pessoa.click(await screen.findByRole('button', { name: /editar maria da silva/i }))
+
+    // O modal só permite o nome: o código aparece visível, mas travado.
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByLabelText(/nome do aluno/i)).toHaveValue('Maria da Silva')
+    expect(within(dialogo).getByLabelText(/código de matrícula/i)).toHaveValue('#26001')
+
+    await pessoa.clear(within(dialogo).getByLabelText(/nome do aluno/i))
+    await pessoa.type(within(dialogo).getByLabelText(/nome do aluno/i), 'Maria Souza')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /salvar alterações/i }))
+
+    const tabela = screen.getByRole('table')
+    expect(await within(tabela).findByText('Maria Souza')).toBeInTheDocument()
+    expect(within(tabela).queryByText('Maria da Silva')).not.toBeInTheDocument()
+    // O código não muda junto com o nome.
+    expect(within(tabela).getByText('#26001')).toBeInTheDocument()
+  })
+
+  it('exclui o aluno sem histórico e o tira da listagem', async () => {
+    const pessoa = userEvent.setup()
+    const lista = [MARIA, JOAO]
+
+    server.use(
+      ...paginaCom(lista),
+      http.delete(`${API}/alunos/:id`, ({ params }) => {
+        const indice = lista.findIndex((aluno) => aluno.id === params.id)
+        if (indice >= 0) lista.splice(indice, 1)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    abrirSessao()
+
+    renderizarAlunos()
+    await pessoa.click(await screen.findByRole('button', { name: /excluir joão pereira/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByRole('heading', { name: 'Excluir aluno' })).toBeInTheDocument()
+    expect(within(dialogo).getByText(/deseja excluir joão pereira da sala/i)).toBeInTheDocument()
+
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir aluno/i }))
+
+    const tabela = screen.getByRole('table')
+    expect(await within(tabela).findByText('Maria da Silva')).toBeInTheDocument()
+    expect(within(tabela).queryByText('João Pereira')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('avisa, sem sair da tela, quando o aluno tem histórico e não pode ser excluído', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem = 'Aluno já possui lançamentos registrados e não pode ser excluído.'
+
+    server.use(
+      ...paginaCom([MARIA]),
+      http.delete(`${API}/alunos/:id`, () =>
+        HttpResponse.json({ statusCode: 409, message: mensagem }, { status: 409 }),
+      ),
+    )
+    abrirSessao()
+
+    renderizarAlunos()
+    await pessoa.click(await screen.findByRole('button', { name: /excluir maria da silva/i }))
+
+    // A mensagem é a da API, mostrada dentro do próprio modal.
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir aluno/i }))
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent(mensagem)
+    // O aluno continua listado: nada foi removido.
+    expect(screen.getByText('Maria da Silva')).toBeInTheDocument()
+    // Cancelar segue abrindo, porque o erro não trava o modal.
+    await pessoa.click(within(dialogo).getByRole('button', { name: /cancelar/i }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 })

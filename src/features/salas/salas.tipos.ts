@@ -101,6 +101,17 @@ export interface NovoAluno {
 }
 
 /**
+ * Corpo de `PATCH /alunos/:id`.
+ *
+ * Só o nome muda: o código de matrícula é autogerado, sequencial por ano, e é
+ * ele que os alunos usam para entrar — deixá-lo editável aqui seria permitir
+ * quebrar o vínculo entre o código anotado e a conta do aluno.
+ */
+export interface EditarAluno {
+  nome: string
+}
+
+/**
  * Sala agrupada pela escola, para a listagem.
  *
  * A API devolve a lista plana e ordenada por ano letivo; o agrupamento é

@@ -1,10 +1,23 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Alert, Button, Card, PageHeader, Table } from '../../components'
+import {
+  Alert,
+  Button,
+  Card,
+  Field,
+  IconeDeEdicao,
+  IconeDeLixeira,
+  Input,
+  Modal,
+  PageHeader,
+  Table,
+} from '../../components'
 import type { TableColumn } from '../../components'
+import { mensagemDeErro } from '../../lib/erro-api'
 import { ModalMatricula } from './ModalMatricula'
 import { NovoAlunoForm } from './NovoAlunoForm'
 import { rotaDaSala } from './rotas'
+import { atualizarAluno, excluirAluno } from './salas.api'
 import { useAlunos, useSala } from './salas.hooks'
 import type { Aluno } from './salas.tipos'
 
@@ -23,6 +36,15 @@ export function AlunosListPage() {
   const [cadastrando, setCadastrando] = useState(false)
   const [recemCriado, setRecemCriado] = useState<Aluno | null>(null)
 
+  const [editando, setEditando] = useState<Aluno | null>(null)
+  const [nomeDoEditando, setNomeDoEditando] = useState('')
+  const [erroAoTentarEditar, setErroAoTentarEditar] = useState<string | null>(null)
+  const [enviandoEdicao, setEnviandoEdicao] = useState(false)
+
+  const [excluindo, setExcluindo] = useState<Aluno | null>(null)
+  const [erroAoExcluir, setErroAoExcluir] = useState<string | null>(null)
+  const [enviandoExclusao, setEnviandoExclusao] = useState(false)
+
   function aoCadastrar(aluno: Aluno) {
     setRecemCriado(aluno)
     // A lista precisa da versão com o aluno novo: sem isso, quem cadastrasse o
@@ -30,6 +52,98 @@ export function AlunosListPage() {
     // professor anotaria o mesmo código de matrícula duas vezes.
     alunos.recarregar()
   }
+
+  function abrirEdicao(aluno: Aluno) {
+    setEditando(aluno)
+    setNomeDoEditando(aluno.nome)
+    setErroAoTentarEditar(null)
+  }
+
+  function fecharEdicao() {
+    if (enviandoEdicao) return
+    setEditando(null)
+    setNomeDoEditando('')
+    setErroAoTentarEditar(null)
+  }
+
+  async function salvarEdicao() {
+    if (!editando || enviandoEdicao) return
+
+    const nome = nomeDoEditando.trim()
+    if (!nome) {
+      setErroAoTentarEditar('Informe o nome do aluno.')
+      return
+    }
+
+    setEnviandoEdicao(true)
+    setErroAoTentarEditar(null)
+    try {
+      await atualizarAluno(editando.id, { nome })
+      fecharEdicao()
+      alunos.recarregar()
+    } catch (falha) {
+      setErroAoTentarEditar(
+        mensagemDeErro(falha, 'Não foi possível salvar as alterações. Tente de novo.'),
+      )
+    } finally {
+      setEnviandoEdicao(false)
+    }
+  }
+
+  function abrirExclusao(aluno: Aluno) {
+    setExcluindo(aluno)
+    setErroAoExcluir(null)
+  }
+
+  function fecharExclusao() {
+    if (enviandoExclusao) return
+    setExcluindo(null)
+    setErroAoExcluir(null)
+  }
+
+  async function confirmarExclusao() {
+    if (!excluindo || enviandoExclusao) return
+
+    setEnviandoExclusao(true)
+    setErroAoExcluir(null)
+    try {
+      await excluirAluno(excluindo.id)
+      fecharExclusao()
+      alunos.recarregar()
+    } catch (falha) {
+      setErroAoExcluir(mensagemDeErro(falha, 'Não foi possível excluir o aluno. Tente de novo.'))
+    } finally {
+      setEnviandoExclusao(false)
+    }
+  }
+
+  const colunas: TableColumn<Aluno>[] = [
+    ...COLUNAS,
+    {
+      key: 'acoes',
+      header: '',
+      cell: (aluno) => (
+        <span className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            aria-label={`Editar ${aluno.nome}`}
+            onClick={() => abrirEdicao(aluno)}
+            className="text-neutral-400 hover:text-primary-700 hover:bg-primary-50 rounded-md p-1 transition-colors"
+          >
+            <IconeDeEdicao />
+          </button>
+          <button
+            type="button"
+            aria-label={`Excluir ${aluno.nome}`}
+            onClick={() => abrirExclusao(aluno)}
+            className="text-neutral-400 hover:text-accent-600 hover:bg-accent-50 rounded-md p-1 transition-colors"
+          >
+            <IconeDeLixeira />
+          </button>
+        </span>
+      ),
+    },
+  ]
 
   return (
     <>
@@ -87,7 +201,7 @@ export function AlunosListPage() {
 
         <Card bare>
           <Table
-            columns={COLUNAS}
+            columns={colunas}
             rows={alunos.dados ?? []}
             rowKey={(aluno) => aluno.id}
             loading={alunos.carregando}
@@ -127,6 +241,78 @@ export function AlunosListPage() {
       </div>
 
       <ModalMatricula aluno={recemCriado} onClose={() => setRecemCriado(null)} />
+
+      {/*
+       * A edição é um modal só com o nome: o código de matrícula aparece fixo
+       * ali embaixo, porque a tentação de mudá-lo seria trocar o "login" de
+       * quem usa o próprio código para entrar — e o aluno já tem senha e
+       * histórico amarrados a ele.
+       */}
+      <Modal
+        open={editando !== null}
+        onClose={fecharEdicao}
+        title="Editar aluno"
+        description="Só o nome muda. O código de matrícula continua o mesmo."
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharEdicao} disabled={enviandoEdicao}>
+              Cancelar
+            </Button>
+            <Button loading={enviandoEdicao} loadingText="Salvando…" onClick={() => void salvarEdicao()}>
+              Salvar alterações
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Nome do aluno">
+            <Input
+              name="nome"
+              value={nomeDoEditando}
+              onChange={(evento) => setNomeDoEditando(evento.target.value)}
+              disabled={enviandoEdicao}
+            />
+          </Field>
+
+          <Field label="Código de matrícula">
+            <Input value={editando ? `#${editando.codigoMatricula}` : ''} disabled />
+          </Field>
+
+          {erroAoTentarEditar ? <Alert tone="erro">{erroAoTentarEditar}</Alert> : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={excluindo !== null}
+        onClose={fecharExclusao}
+        title="Excluir aluno"
+        description={
+          excluindo ? `Deseja excluir ${excluindo.nome} da sala?` : undefined
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharExclusao} disabled={enviandoExclusao}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              loading={enviandoExclusao}
+              loadingText="Excluindo…"
+              onClick={() => void confirmarExclusao()}
+            >
+              Excluir aluno
+            </Button>
+          </>
+        }
+      >
+        {/*
+         * O 409 (aluno com histórico) cai aqui dentro: a mensagem da API chega
+         * pela `mensagemDeErro` e o modal continua aberto para o professor ler
+         * o motivo — o aluno tem lançamentos ou já foi membro de grupo, e por
+         * isso não sai por esta tela.
+         */}
+        {erroAoExcluir ? <Alert tone="erro">{erroAoExcluir}</Alert> : null}
+      </Modal>
     </>
   )
 }

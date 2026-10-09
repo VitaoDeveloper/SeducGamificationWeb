@@ -2,6 +2,7 @@ import { api } from '../../lib/api'
 import type {
   Aluno,
   ComponenteCurricular,
+  EditarAluno,
   EditarSala,
   EscolaResumo,
   Lecionamento,
@@ -151,4 +152,28 @@ export async function listarAlunos(salaId: string): Promise<Aluno[]> {
 export async function cadastrarAluno(salaId: string, novo: NovoAluno): Promise<Aluno> {
   const { data } = await api.post<Aluno>(`/salas/${salaId}/alunos`, novo)
   return data
+}
+
+/**
+ * Renomeia o aluno e devolve a linha já atualizada.
+ *
+ * Só o nome vai no corpo. O código de matrícula é autogerado e imutável (ver
+ * `EditarAluno`), e a resposta traz a nova versão, que a tela usa para repor a
+ * listagem sem uma segunda leitura.
+ */
+export async function atualizarAluno(id: string, alteracoes: EditarAluno): Promise<Aluno> {
+  const { data } = await api.patch<Aluno>(`/alunos/${id}`, alteracoes)
+  return data
+}
+
+/**
+ * Exclui o aluno.
+ *
+ * A API só exclui quem nunca participou de competição: com lançamentos de nota
+ * ou grupo vinculado responde `409` com a explicação, e é essa mensagem que a
+ * tela mostra — deixar claro que o bloqueio é histórico, não um capricho do
+ * servidor. O retorno é vazio (a resposta é `204`).
+ */
+export async function excluirAluno(id: string): Promise<void> {
+  await api.delete(`/alunos/${id}`)
 }
