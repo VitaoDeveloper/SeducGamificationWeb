@@ -84,6 +84,18 @@ export function dataParaISO(data: string): string {
   return new Date(`${data}T00:00:00.000Z`).toISOString()
 }
 
+/**
+ * `aaaa-mm-dd` do texto ISO, para preencher o `<input type="date">`.
+ *
+ * As datas trafegam gravadas à meia-noite UTC, então os 10 primeiros caracteres
+ * do ISO `T00:00:00.000Z` são exatamente o dia que o professor digitou — cortar
+ * no `T` é mais seguro do que passar por `Date`, que devolveria o dia local para
+ * quem está a oeste de Greenwich.
+ */
+export function dataParaCampo(iso: string): string {
+  return iso.slice(0, 10)
+}
+
 /** Rótulo do bimestre, na ordem que a escola usa: 1º, 2º, 3º e 4º. */
 export function rotuloDoBimestre(numero: number): string {
   return `${numero}º Bimestre`

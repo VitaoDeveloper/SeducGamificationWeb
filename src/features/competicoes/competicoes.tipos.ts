@@ -95,3 +95,26 @@ export interface NovaCompeticao {
   lecionamentoId: string
   bimestres: NovoBimestre[]
 }
+
+/**
+ * Corpo de `PATCH /competicoes/:id`.
+ *
+ * Só o nome muda: os bimestres e quem participa da competição são o que ela é,
+ * e nenhuma tela daria a um professor a chance de trocá-los por engano — o nome
+ * é a parte decidida depois, quando a disputa já ganhou um apelido.
+ */
+export interface EditarCompeticao {
+  nome: string
+}
+
+/**
+ * Corpo de `PATCH /bimestres/:id`.
+ *
+ * As duas datas juntas, mesmo que só uma vá mudar: a API aceita cada uma
+ * opcional, mas a tela sempre grava o par completo, porque é o par que a
+ * validação contra os bimestres vizinhos julga.
+ */
+export interface EditarBimestre {
+  dataInicio: string
+  dataFim: string
+}

@@ -1,16 +1,30 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
   Badge,
   Button,
   Card,
   CardTitle,
+  Field,
+  IconeDeEdicao,
+  IconeDeLixeira,
+  Input,
+  Modal,
   PageHeader,
   Spinner,
   useToast,
 } from '../../components'
-import { formatarData, rotuloDoBimestre } from './bimestres'
+import { mensagemDeErro } from '../../lib/erro-api'
+import {
+  dataParaCampo,
+  dataParaISO,
+  formatarData,
+  rotuloDoBimestre,
+  validarBimestres,
+} from './bimestres'
+import type { BimestreForm, ErroDeBimestre } from './bimestres'
+import { atualizarBimestre, atualizarCompeticao, excluirCompeticao } from './competicoes.api'
 import { useCompeticao, useContextoDaCompeticao, useGrupos } from './competicoes.hooks'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
@@ -99,6 +113,7 @@ const ABAS: Array<{ id: AbaDaCompeticao; rotulo: string }> = [
  */
 export function CompeticaoDetailPage() {
   const { competicaoId } = useParams<{ competicaoId: string }>()
+  const navigate = useNavigate()
   const toast = useToast()
 
   const competicao = useCompeticao(competicaoId)
@@ -290,6 +305,154 @@ export function CompeticaoDetailPage() {
     setDesempatesGravados((atual) => atual + 1)
   }
 
+  /*
+   * Renomear a competição: um modal só com o nome, aberto pelo cabeçalho. A
+   * resposta não é usada — depois de renomear a página relê a competição inteira,
+   * para o nome novo e os dados antigos virem da mesma fonte.
+   */
+  const [editandoNome, setEditandoNome] = useState(false)
+  const [nomeDaCompeticao, setNomeDaCompeticao] = useState('')
+  const [erroAoRenomear, setErroAoRenomear] = useState<string | null>(null)
+  const [renomeando, setRenomeando] = useState(false)
+
+  /*
+   * Corrigir as datas de um bimestre. O formado reusa `validarBimestres` da
+   * criação: são os mesmos erros por bloco e o mesmo erro de conjunto. A única
+   * coisa que muda é quem está em edição (os outros três entram com as datas que
+   * a API já validou), então não existe outra regra para duplicar.
+   */
+  const [bimestreEmEdicao, setBimestreEmEdicao] = useState<Bimestre | null>(null)
+  const [datasEmEdicao, setDatasEmEdicao] = useState({ dataInicio: '', dataFim: '' })
+  const [erroDasDatas, setErroDasDatas] = useState<ErroDeBimestre>({})
+  const [erroGeralDasDatas, setErroGeralDasDatas] = useState<string | null>(null)
+  const [salvandoDatas, setSalvandoDatas] = useState(false)
+
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null)
+  const [excluindo, setExcluindo] = useState(false)
+
+  function abrirEdicaoDoNome() {
+    setNomeDaCompeticao(competicao.dados?.nome ?? '')
+    setErroAoRenomear(null)
+    setEditandoNome(true)
+  }
+
+  function fecharEdicaoDoNome() {
+    if (renomeando) return
+    setEditandoNome(false)
+    setErroAoRenomear(null)
+  }
+
+  async function salvarNome() {
+    if (renomeando) return
+
+    const nome = nomeDaCompeticao.trim()
+    if (!nome) {
+      setErroAoRenomear('Informe o nome da competição.')
+      return
+    }
+
+    setRenomeando(true)
+    setErroAoRenomear(null)
+    try {
+      await atualizarCompeticao(competicao.dados!.id, { nome })
+      setEditandoNome(false)
+      setErroAoRenomear(null)
+      toast.success('Nome da competição atualizado.')
+      competicao.recarregar()
+    } catch (falha) {
+      setErroAoRenomear(mensagemDeErro(falha, 'Não foi possível salvar o nome. Tente de novo.'))
+    } finally {
+      setRenomeando(false)
+    }
+  }
+
+  function abrirEdicaoDoBimestre(bimestre: Bimestre) {
+    setBimestreEmEdicao(bimestre)
+    setDatasEmEdicao({
+      dataInicio: dataParaCampo(bimestre.dataInicio),
+      dataFim: dataParaCampo(bimestre.dataFim),
+    })
+    setErroDasDatas({})
+    setErroGeralDasDatas(null)
+  }
+
+  function fecharEdicaoDoBimestre() {
+    if (salvandoDatas) return
+    setBimestreEmEdicao(null)
+    setErroDasDatas({})
+    setErroGeralDasDatas(null)
+  }
+
+  async function salvarDatas() {
+    if (!bimestreEmEdicao || salvandoDatas) return
+
+    // Os vizinhos entram com as datas que a API já validou; juntar tudo é o que
+    // permite `validarBimestres` acusar sobreposição com o bimestre próximo.
+    const formulario: BimestreForm[] = bimestres.map((bimestre) => ({
+      numero: bimestre.numero,
+      dataInicio:
+        bimestre.id === bimestreEmEdicao.id
+          ? datasEmEdicao.dataInicio
+          : dataParaCampo(bimestre.dataInicio),
+      dataFim:
+        bimestre.id === bimestreEmEdicao.id
+          ? datasEmEdicao.dataFim
+          : dataParaCampo(bimestre.dataFim),
+    }))
+    const validacao = validarBimestres(formulario)
+
+    setErroDasDatas(validacao.porNumero[bimestreEmEdicao.numero] ?? {})
+    setErroGeralDasDatas(validacao.geral ?? null)
+    if (!validacao.valido) return
+
+    setSalvandoDatas(true)
+    try {
+      await atualizarBimestre(bimestreEmEdicao.id, {
+        dataInicio: dataParaISO(datasEmEdicao.dataInicio),
+        dataFim: dataParaISO(datasEmEdicao.dataFim),
+      })
+      setBimestreEmEdicao(null)
+      setErroDasDatas({})
+      setErroGeralDasDatas(null)
+      toast.success(`${rotuloDoBimestre(bimestreEmEdicao.numero)} atualizado.`)
+      competicao.recarregar()
+    } catch (falha) {
+      // O 409 (bimestre com pontuação) cai aqui: a mensagem da API é a que a tela
+      // mostra, e o modal continua aberto porque nada foi alterado.
+      setErroGeralDasDatas(mensagemDeErro(falha, 'Não foi possível alterar as datas. Tente de novo.'))
+    } finally {
+      setSalvandoDatas(false)
+    }
+  }
+
+  function abrirExclusao() {
+    setErroExclusao(null)
+    setConfirmandoExclusao(true)
+  }
+
+  function fecharExclusao() {
+    if (excluindo) return
+    setConfirmandoExclusao(false)
+    setErroExclusao(null)
+  }
+
+  async function excluir() {
+    if (excluindo) return
+
+    setExcluindo(true)
+    setErroExclusao(null)
+    try {
+      await excluirCompeticao(competicao.dados!.id)
+      toast.success('Competição excluída.')
+      navigate(sala ? rotaDasCompeticoes(sala.id) : '/salas')
+    } catch (falha) {
+      setErroExclusao(mensagemDeErro(falha, 'Não foi possível excluir a competição. Tente de novo.'))
+    } finally {
+      setExcluindo(false)
+    }
+  }
+
   if (competicao.carregando) {
     return (
       <>
@@ -329,11 +492,29 @@ export function CompeticaoDetailPage() {
         title={dados.nome}
         description={sala ? `${sala.nome} · ${sala.escola.nome}` : 'Competição da sala'}
         action={
-          sala ? (
-            <Link to={rotaDasCompeticoes(sala.id)}>
-              <Button variant="outline">Competições da sala</Button>
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            {/*
+             * Editar o nome e excluir a competição dependem só da competição; a
+             * volta para a sala, do contexto. A ação destrutiva fica ao lado das
+             * outras, sem destaque — o professor que procura "excluir" acha, e
+             * quem só quer navegar não passa perto dela.
+             */}
+            <Button variant="outline" onClick={abrirEdicaoDoNome}>
+              Editar nome
+            </Button>
+            <Button
+              variant="outline"
+              leadingIcon={<IconeDeLixeira />}
+              onClick={abrirExclusao}
+            >
+              Excluir competição
+            </Button>
+            {sala ? (
+              <Link to={rotaDasCompeticoes(sala.id)}>
+                <Button variant="outline">Competições da sala</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -398,7 +579,11 @@ export function CompeticaoDetailPage() {
           <ul className="grid gap-3 p-6 sm:grid-cols-2 lg:grid-cols-4">
             {bimestres.map((bimestre) => (
               <li key={bimestre.id}>
-                <BlocoDeBimestre bimestre={bimestre} />
+                <BlocoDeBimestre
+                  bimestre={bimestre}
+                  editavel={bimestre.situacao === SITUACAO_BIMESTRE.ABERTO}
+                  onEditar={() => abrirEdicaoDoBimestre(bimestre)}
+                />
               </li>
             ))}
           </ul>
@@ -637,6 +822,125 @@ export function CompeticaoDetailPage() {
         onClose={() => setDesempateAberto(null)}
         onResolvido={aoResolverDesempate}
       />
+
+      <Modal
+        open={editandoNome}
+        onClose={fecharEdicaoDoNome}
+        title="Editar nome"
+        description="As datas dos bimestres, os grupos e a pontuação não mudam com o nome."
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharEdicaoDoNome} disabled={renomeando}>
+              Cancelar
+            </Button>
+            <Button loading={renomeando} loadingText="Salvando…" onClick={() => void salvarNome()}>
+              Salvar alterações
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Nome da competição">
+            <Input
+              name="nome"
+              value={nomeDaCompeticao}
+              onChange={(evento) => setNomeDaCompeticao(evento.target.value)}
+              disabled={renomeando}
+            />
+          </Field>
+
+          {erroAoRenomear ? <Alert tone="erro">{erroAoRenomear}</Alert> : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={bimestreEmEdicao !== null}
+        onClose={fecharEdicaoDoBimestre}
+        title={
+          bimestreEmEdicao
+            ? `Editar datas do ${rotuloDoBimestre(bimestreEmEdicao.numero)}`
+            : 'Editar datas'
+        }
+        description="As datas precisam continuar em ordem crescente, sem sobrepor os outros bimestres."
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharEdicaoDoBimestre} disabled={salvandoDatas}>
+              Cancelar
+            </Button>
+            <Button
+              loading={salvandoDatas}
+              loadingText="Salvando…"
+              onClick={() => void salvarDatas()}
+            >
+              Salvar alterações
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Início" error={erroDasDatas.dataInicio}>
+            <Input
+              name="inicio"
+              type="date"
+              value={datasEmEdicao.dataInicio}
+              onChange={(evento) =>
+                setDatasEmEdicao((atual) => ({ ...atual, dataInicio: evento.target.value }))
+              }
+              disabled={salvandoDatas}
+            />
+          </Field>
+
+          <Field label="Fim" error={erroDasDatas.dataFim}>
+            <Input
+              name="fim"
+              type="date"
+              value={datasEmEdicao.dataFim}
+              onChange={(evento) =>
+                setDatasEmEdicao((atual) => ({ ...atual, dataFim: evento.target.value }))
+              }
+              disabled={salvandoDatas}
+            />
+          </Field>
+
+          {erroGeralDasDatas ? <Alert tone="erro">{erroGeralDasDatas}</Alert> : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmandoExclusao}
+        onClose={fecharExclusao}
+        title="Excluir competição"
+        description={`A competição "${dados.nome}" será removida permanentemente. Esta ação não pode ser desfeita.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharExclusao} disabled={excluindo}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              loading={excluindo}
+              loadingText="Excluindo…"
+              onClick={() => void excluir()}
+            >
+              Excluir competição
+            </Button>
+          </>
+        }
+      >
+        {/*
+         * O 409 (competição em uso) cai aqui: a mensagem da API é mostrada e o
+         * modal continua aberto — nada foi apagado, e o motivo é do servidor.
+         */}
+        {erroExclusao ? (
+          <Alert tone="erro">{erroExclusao}</Alert>
+        ) : (
+          <p className="text-neutral-600 text-sm">
+            Só é possível excluir uma competição sem uso: sem bimestre encerrado,
+            sem pontuação definida e sem grupo com integrante. Se houver algum
+            desses, nada é apagado e o motivo aparece aqui.
+          </p>
+        )}
+      </Modal>
     </>
   )
 }
@@ -658,7 +962,15 @@ function rotuloDaAba(
   return aba.rotulo
 }
 
-function BlocoDeBimestre({ bimestre }: { bimestre: Bimestre }) {
+function BlocoDeBimestre({
+  bimestre,
+  editavel,
+  onEditar,
+}: {
+  bimestre: Bimestre
+  editavel: boolean
+  onEditar: () => void
+}) {
   const aberto = bimestre.situacao === SITUACAO_BIMESTRE.ABERTO
 
   return (
@@ -667,7 +979,25 @@ function BlocoDeBimestre({ bimestre }: { bimestre: Bimestre }) {
         <span className="text-sm font-semibold text-neutral-700">
           {rotuloDoBimestre(bimestre.numero)}
         </span>
-        <Badge tone={aberto ? 'primary' : 'neutro'}>{aberto ? 'Aberto' : 'Encerrado'}</Badge>
+        <span className="flex items-center gap-1">
+          {/*
+           * O lápis só aparece no bimestre aberto: a situação vem da competição
+           * que a tela já carregou, então não há chamada extra para decidir. Se o
+           * bimestre tiver pontuação — o que a tela não sabe daqui —, a API
+           * recusa e o motivo aparece no próprio modal.
+           */}
+          {editavel ? (
+            <button
+              type="button"
+              aria-label={`Editar datas do ${rotuloDoBimestre(bimestre.numero)}`}
+              onClick={onEditar}
+              className="text-neutral-400 hover:text-primary-700 hover:bg-primary-50 rounded-md p-1 transition-colors"
+            >
+              <IconeDeEdicao />
+            </button>
+          ) : null}
+          <Badge tone={aberto ? 'primary' : 'neutro'}>{aberto ? 'Aberto' : 'Encerrado'}</Badge>
+        </span>
       </div>
       <p className="text-neutral-500 mt-1.5 text-xs">
         {formatarData(bimestre.dataInicio)} a {formatarData(bimestre.dataFim)}

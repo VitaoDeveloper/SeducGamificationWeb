@@ -1,6 +1,9 @@
 import { api } from '../../lib/api'
 import type {
+  Bimestre,
   CompeticaoCompleta,
+  EditarBimestre,
+  EditarCompeticao,
   GrupoCompetidor,
   GruposDaCompeticao,
   MembroDoGrupo,
@@ -25,6 +28,46 @@ export async function criarCompeticao(nova: NovaCompeticao): Promise<CompeticaoC
 export async function detalharCompeticao(competicaoId: string): Promise<CompeticaoCompleta> {
   const { data } = await api.get<CompeticaoCompleta>(`/competicoes/${competicaoId}`)
   return data
+}
+
+/**
+ * `PATCH /competicoes/:id` — renomeia a competição.
+ *
+ * A resposta é a linha sem os aninhados que `GET` traz, e a tela nem a usa:
+ * depois de renomear, ela relê a competição para o cabeçalho e os demais dados
+ * virem da mesma fonte.
+ */
+export async function atualizarCompeticao(
+  id: string,
+  alteracoes: EditarCompeticao,
+): Promise<CompeticaoCompleta> {
+  const { data } = await api.patch<CompeticaoCompleta>(`/competicoes/${id}`, alteracoes)
+  return data
+}
+
+/**
+ * `PATCH /bimestres/:id` — corrige as datas de um bimestre.
+ *
+ * A API só aceita bimestre `ABERTO` e sem componentes de pontuação; numa dessas
+ * recusas responde 409 com a explicação, e é ela que a tela mostra — a regra de
+ * que a pontuação congela as datas não pertence à interface, e adivinhá-la aqui
+ * esconderia o motivo do servidor.
+ */
+export async function atualizarBimestre(id: string, alteracoes: EditarBimestre): Promise<Bimestre> {
+  const { data } = await api.patch<Bimestre>(`/bimestres/${id}`, alteracoes)
+  return data
+}
+
+/**
+ * `DELETE /competicoes/:id` — exclui a competição.
+ *
+ * A API só exclui competição sem uso — sem bimestre encerrado, pontuação ou
+ * grupo com integrante. Cada recusa responde 409 com a explicação, e os três
+ * motivos só o servidor sabe distinguir; a tela mostra a mensagem do jeito que
+ * veio. O retorno é vazio (a resposta é `204`).
+ */
+export async function excluirCompeticao(id: string): Promise<void> {
+  await api.delete(`/competicoes/${id}`)
 }
 
 /** `GET /lecionamentos/:id/competicoes` — competições de um lecionamento. */

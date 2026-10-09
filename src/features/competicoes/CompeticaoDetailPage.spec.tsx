@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { Link, Route, Routes } from 'react-router-dom'
@@ -13,6 +13,7 @@ import {
   TOKEN_DE_TESTE,
   aluno,
   bimestre,
+  bimestresDaCompeticao,
   competicao,
   componentesDoBimestre as componentesDoBimestreResposta,
   desempateDaCompeticao,
@@ -33,6 +34,7 @@ import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import { TIPO_RANKING } from '../rankings/rankings.tipos'
 import { CompeticaoDetailPage } from './CompeticaoDetailPage'
 import { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
+import { rotaDasCompeticoes } from '../salas/rotas'
 import type { Lancamento } from './componentes-pontuacao.tipos'
 
 const SALA = sala({ id: 'sala-1', nome: '2º DS', escola: ESCOLA_A })
@@ -50,6 +52,17 @@ const BIMESTRES = [
   bimestre({ id: 'b3', competicaoId: 'comp-1', numero: 3, situacao: SITUACAO_BIMESTRE.ENCERRADO }),
   bimestre({ id: 'b4', competicaoId: 'comp-1', numero: 4, situacao: SITUACAO_BIMESTRE.ENCERRADO }),
 ]
+
+/*
+ * Bimestres com datas encadeadas (um período por bimestre), com só o primeiro
+ * aberto. `BIMESTRES` usa a data padrão da factory para os quatro — proposital
+ * para as demais telas, mas inútil para a edição: os vizinhos precisam ter datas
+ * distintas, senão a própria validação da tela barra a gravação antes de a API
+ * ser chamada.
+ */
+const BIMESTRES_ENCADEADOS = bimestresDaCompeticao('comp-1').map((bimestre) =>
+  bimestre.numero === 1 ? bimestre : { ...bimestre, situacao: SITUACAO_BIMESTRE.ENCERRADO },
+)
 
 const COMPETICAO = competicao({
   id: 'comp-1',
@@ -383,6 +396,174 @@ describe('CompeticaoDetailPage', () => {
       expect(screen.getAllByLabelText('Nota de Ana')[0]).toHaveAttribute('type', 'number'),
     )
     expect(screen.queryAllByLabelText('Conceito de Ana')).toHaveLength(0)
+  })
+
+  it('edita o nome da competição e reflete no cabeçalho', async () => {
+    const pessoa = userEvent.setup()
+    let nome = COMPETICAO.nome
+
+    server.use(
+      http.get(`${API}/competicoes/:id`, () =>
+        HttpResponse.json({ ...COMPETICAO, nome, bimestres: BIMESTRES }),
+      ),
+      ...salasDoProfessor([SALA], { [SALA.id]: [LECIONAMENTO] }),
+      http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
+      grupos(),
+      ...desempateDaCompeticao([]),
+      http.patch(`${API}/competicoes/:id`, async ({ request }) => {
+        const corpo = (await request.json()) as { nome: string }
+        nome = corpo.nome
+        return HttpResponse.json({ ...COMPETICAO, nome })
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /editar nome/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    const campo = within(dialogo).getByLabelText(/nome da competição/i)
+    expect(campo).toHaveValue('Copa do Conhecimento')
+
+    await pessoa.clear(campo)
+    await pessoa.type(campo, 'Copa do Saber')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /salvar alterações/i }))
+
+    // O cabeçalho relê a competição: o nome novo vem do servidor, não do palpite
+    // de manter o valor digitado na tela.
+    expect(await screen.findByRole('heading', { name: 'Copa do Saber' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('edita as datas de um bimestre aberto e reflete no card', async () => {
+    const pessoa = userEvent.setup()
+    const bimestresMutaveis = BIMESTRES_ENCADEADOS.map((item) => ({ ...item }))
+
+    server.use(
+      http.get(`${API}/competicoes/:id`, () =>
+        HttpResponse.json({ ...COMPETICAO, bimestres: bimestresMutaveis }),
+      ),
+      ...salasDoProfessor([SALA], { [SALA.id]: [LECIONAMENTO] }),
+      http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
+      grupos(),
+      ...desempateDaCompeticao([]),
+      http.patch(`${API}/bimestres/:id`, async ({ request }) => {
+        const corpo = (await request.json()) as { dataInicio: string; dataFim: string }
+        const indice = bimestresMutaveis.findIndex((item) => item.id === 'comp-1-b1')
+        bimestresMutaveis[indice] = { ...bimestresMutaveis[indice]!, ...corpo }
+        return HttpResponse.json(bimestresMutaveis[indice])
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+
+    // Só o bimestre aberto tem o lápis; o encerrado não oferece a edição.
+    expect(screen.getByRole('button', { name: /editar datas do 1º bimestre/i })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /editar datas do 2º bimestre/i }),
+    ).not.toBeInTheDocument()
+
+    await pessoa.click(screen.getByRole('button', { name: /editar datas do 1º bimestre/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    expect(within(dialogo).getByLabelText('Início')).toHaveValue('2026-02-01')
+    expect(within(dialogo).getByLabelText('Fim')).toHaveValue('2026-04-30')
+
+    fireEvent.change(within(dialogo).getByLabelText('Início'), { target: { value: '2026-02-05' } })
+    await pessoa.click(within(dialogo).getByRole('button', { name: /salvar alterações/i }))
+
+    expect(await screen.findByText(/05\/02\/2026 a 30\/04\/2026/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('mostra a mensagem da API e não altera o card quando a edição das datas é recusada', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem =
+      'Não é possível alterar as datas de um bimestre que já possui pontuação definida.'
+
+    server.use(
+      http.get(`${API}/competicoes/:id`, () =>
+        HttpResponse.json({ ...COMPETICAO, bimestres: BIMESTRES_ENCADEADOS }),
+      ),
+      ...salasDoProfessor([SALA], { [SALA.id]: [LECIONAMENTO] }),
+      http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
+      grupos(),
+      ...desempateDaCompeticao([]),
+      http.patch(`${API}/bimestres/:id`, () =>
+        HttpResponse.json({ statusCode: 409, message: mensagem }, { status: 409 }),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /editar datas do 1º bimestre/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    fireEvent.change(within(dialogo).getByLabelText('Início'), { target: { value: '2026-02-05' } })
+    await pessoa.click(within(dialogo).getByRole('button', { name: /salvar alterações/i }))
+
+    // O motivo vem do servidor e o modal continua aberto: nada foi gravado.
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent(mensagem)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/01\/02\/2026 a 30\/04\/2026/)).toBeInTheDocument()
+  })
+
+  it('mostra a mensagem da API e mantém a competição quando a exclusão é recusada', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem = 'Competição já possui pontuação definida e não pode ser excluída.'
+
+    server.use(
+      ...cenario(),
+      http.delete(`${API}/competicoes/:id`, () =>
+        HttpResponse.json({ statusCode: 409, message: mensagem }, { status: 409 }),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /excluir competição/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir competição/i }))
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent(mensagem)
+    // Continua na competição: a recusa não desmonta nada.
+    expect(screen.getByRole('heading', { name: 'Copa do Conhecimento' })).toBeInTheDocument()
+  })
+
+  it('exclui a competição sem uso e volta para a listagem da sala', async () => {
+    const pessoa = userEvent.setup()
+
+    server.use(
+      ...cenario(),
+      http.delete(`${API}/competicoes/:id`, () => new HttpResponse(null, { status: 204 })),
+    )
+    abrirSessao()
+
+    renderComSessao(
+      <Routes>
+        <Route path={ROTA_COMPETICAO_DETALHE} element={<CompeticaoDetailPage />} />
+        <Route path={rotaDasCompeticoes(SALA.id)} element={<p>Listagem de competições da sala</p>} />
+      </Routes>,
+      rotaDaCompeticao(COMPETICAO.id),
+    )
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /excluir competição/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir competição/i }))
+
+    expect(await screen.findByText('Listagem de competições da sala')).toBeInTheDocument()
   })
 })
 
