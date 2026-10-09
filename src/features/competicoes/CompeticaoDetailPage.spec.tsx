@@ -31,6 +31,7 @@ import {
   validacaoDePesos,
 } from '../../test/handlers'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
+import type { GrupoComMembros } from './competicoes.tipos'
 import { TIPO_RANKING } from '../rankings/rankings.tipos'
 import { CompeticaoDetailPage } from './CompeticaoDetailPage'
 import { ROTA_COMPETICAO_DETALHE, rotaDaCompeticao } from './rotas'
@@ -122,6 +123,33 @@ function cenario() {
     grupos(),
     ...desempateDaCompeticao([]),
   ]
+}
+
+/**
+ * Cenário da página com o handler de grupos apontando para uma lista mutável.
+ *
+ * A lista é lida a cada requisição, para que renomear ou excluir um grupo mude o
+ * que a recarga seguinte devolve — o mesmo papel das datas mutáveis nos testes de
+ * edição de bimestre.
+ */
+function cenarioComGrupos(obterGrupos: () => GrupoComMembros[]) {
+  return [
+    http.get(`${API}/competicoes/:id`, () =>
+      HttpResponse.json({ ...COMPETICAO, bimestres: BIMESTRES }),
+    ),
+    ...salasDoProfessor([SALA], { [SALA.id]: [LECIONAMENTO] }),
+    http.get(`${API}/salas/:salaId/alunos`, () => HttpResponse.json(ALUNOS)),
+    http.get(`${API}/competicoes/:id/grupos`, ({ request }) => {
+      const bimestreId = new URL(request.url).searchParams.get('bimestreId')
+      return HttpResponse.json({ bimestreId: bimestreId ?? 'b1', grupos: obterGrupos() })
+    }),
+    ...desempateDaCompeticao([]),
+  ]
+}
+
+/** Um grupo sem integrantes no bimestre selecionado. */
+function grupoVazio(id: string, nome: string): GrupoComMembros {
+  return { ...grupo({ id, nome, competicaoId: COMPETICAO.id }), membrosGrupos: [] }
 }
 
 function renderizarDetalhe() {
@@ -564,6 +592,91 @@ describe('CompeticaoDetailPage', () => {
     await pessoa.click(within(dialogo).getByRole('button', { name: /excluir competição/i }))
 
     expect(await screen.findByText('Listagem de competições da sala')).toBeInTheDocument()
+  })
+
+  it('edita o nome de um grupo e reflete na listagem', async () => {
+    const pessoa = userEvent.setup()
+    let listagem = [grupoVazio('g1', 'Alpha')]
+
+    server.use(
+      ...cenarioComGrupos(() => listagem),
+      http.patch(`${API}/grupos/:id`, async ({ request, params }) => {
+        const corpo = (await request.json()) as { nome: string }
+        listagem = listagem.map((item) =>
+          item.id === String(params.id) ? { ...item, nome: corpo.nome } : item,
+        )
+        return HttpResponse.json(listagem.find((item) => item.id === String(params.id)))
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /editar grupo alpha/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    const campo = within(dialogo).getByLabelText(/nome do grupo/i)
+    expect(campo).toHaveValue('Alpha')
+
+    await pessoa.clear(campo)
+    await pessoa.type(campo, 'Alpha Prime')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /salvar alterações/i }))
+
+    expect((await screen.findAllByText('Alpha Prime')).length).toBeGreaterThan(0)
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('exclui um grupo sem integrantes e ele some da listagem', async () => {
+    const pessoa = userEvent.setup()
+    let listagem = [grupoVazio('g1', 'Alpha'), grupoVazio('g2', 'Beta')]
+
+    server.use(
+      ...cenarioComGrupos(() => listagem),
+      http.delete(`${API}/grupos/:id`, ({ params }) => {
+        listagem = listagem.filter((item) => item.id !== String(params.id))
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /excluir grupo alpha/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir grupo/i }))
+
+    await waitFor(() => expect(screen.queryAllByText('Alpha')).toHaveLength(0))
+    expect(screen.getAllByText('Beta').length).toBeGreaterThan(0)
+  })
+
+  it('mostra a mensagem da API e mantém o grupo quando a exclusão é recusada', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem =
+      'Grupo possui membros em algum bimestre. Remova os membros um a um antes de excluir.'
+    const listagem = [grupoVazio('g1', 'Alpha')]
+
+    server.use(
+      ...cenarioComGrupos(() => listagem),
+      http.delete(`${API}/grupos/:id`, () =>
+        HttpResponse.json({ statusCode: 409, message: mensagem }, { status: 409 }),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await screen.findAllByText('Alpha')
+    await pessoa.click(screen.getByRole('button', { name: /excluir grupo alpha/i }))
+
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir grupo/i }))
+
+    // A orientação vem do servidor e o modal continua aberto: o grupo fica.
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent(mensagem)
+    expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0)
   })
 })
 

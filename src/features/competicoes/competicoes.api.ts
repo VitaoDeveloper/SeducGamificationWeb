@@ -4,6 +4,7 @@ import type {
   CompeticaoCompleta,
   EditarBimestre,
   EditarCompeticao,
+  EditarGrupo,
   GrupoCompetidor,
   GruposDaCompeticao,
   MembroDoGrupo,
@@ -81,6 +82,32 @@ export async function listarCompeticoesDoLecionamento(
 export async function criarGrupo(competicaoId: string, nome: string): Promise<GrupoCompetidor> {
   const { data } = await api.post<GrupoCompetidor>(`/competicoes/${competicaoId}/grupos`, { nome })
   return data
+}
+
+/**
+ * `PATCH /grupos/:id` — renomeia o grupo.
+ *
+ * O nome é o rótulo da equipe e vale para a competição inteira: não muda com o
+ * bimestre, então renomear não mexe em quem está no grupo em cada período.
+ */
+export async function atualizarGrupo(
+  id: string,
+  alteracoes: EditarGrupo,
+): Promise<GrupoCompetidor> {
+  const { data } = await api.patch<GrupoCompetidor>(`/grupos/${id}`, alteracoes)
+  return data
+}
+
+/**
+ * `DELETE /grupos/:id` — exclui o grupo.
+ *
+ * A API só exclui grupo sem membros em nenhum bimestre; com qualquer integrante
+ * responde 409 com a orientação para removê-los um a um, e é essa mensagem que a
+ * tela mostra — não há remoção em massa de membros a partir daqui. O retorno é
+ * vazio (a resposta é `204`).
+ */
+export async function excluirGrupo(id: string): Promise<void> {
+  await api.delete(`/grupos/${id}`)
 }
 
 /**

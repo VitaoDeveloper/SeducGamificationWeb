@@ -118,3 +118,13 @@ export interface EditarBimestre {
   dataInicio: string
   dataFim: string
 }
+
+/**
+ * Corpo de `PATCH /grupos/:id`.
+ *
+ * Só o nome: o grupo é a equipe que atravessa o ano, e quem está nele é assunto
+ * do gerenciador de membros, por bimestre — não do rótulo da equipe.
+ */
+export interface EditarGrupo {
+  nome: string
+}

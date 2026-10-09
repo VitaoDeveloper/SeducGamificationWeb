@@ -24,7 +24,13 @@ import {
   validarBimestres,
 } from './bimestres'
 import type { BimestreForm, ErroDeBimestre } from './bimestres'
-import { atualizarBimestre, atualizarCompeticao, excluirCompeticao } from './competicoes.api'
+import {
+  atualizarBimestre,
+  atualizarCompeticao,
+  atualizarGrupo,
+  excluirCompeticao,
+  excluirGrupo,
+} from './competicoes.api'
 import { useCompeticao, useContextoDaCompeticao, useGrupos } from './competicoes.hooks'
 import { SITUACAO_BIMESTRE } from './competicoes.tipos'
 import type { Bimestre, GrupoComMembros } from './competicoes.tipos'
@@ -453,6 +459,90 @@ export function CompeticaoDetailPage() {
     }
   }
 
+  /*
+   * Renomear e excluir grupo. As duas ações vivem no cartão do grupo e valem
+   * para a competição inteira — o nome não é por bimestre, e a exclusão olha os
+   * integrantes de todos eles. Por isso a tela não tenta decidir sozinha se o
+   * grupo pode sair: com qualquer integrante, em qualquer bimestre, a API
+   * recusa com a orientação, e é ela que o modal mostra.
+   */
+  const [grupoEmEdicao, setGrupoEmEdicao] = useState<GrupoComMembros | null>(null)
+  const [nomeDoGrupo, setNomeDoGrupo] = useState('')
+  const [erroAoRenomearGrupo, setErroAoRenomearGrupo] = useState<string | null>(null)
+  const [renomeandoGrupo, setRenomeandoGrupo] = useState(false)
+
+  const [grupoParaExcluir, setGrupoParaExcluir] = useState<GrupoComMembros | null>(null)
+  const [erroExclusaoDoGrupo, setErroExclusaoDoGrupo] = useState<string | null>(null)
+  const [excluindoGrupo, setExcluindoGrupo] = useState(false)
+
+  function abrirEdicaoDoGrupo(grupo: GrupoComMembros) {
+    setNomeDoGrupo(grupo.nome)
+    setErroAoRenomearGrupo(null)
+    setGrupoEmEdicao(grupo)
+  }
+
+  function fecharEdicaoDoGrupo() {
+    if (renomeandoGrupo) return
+    setGrupoEmEdicao(null)
+    setErroAoRenomearGrupo(null)
+  }
+
+  async function salvarNomeDoGrupo() {
+    if (!grupoEmEdicao || renomeandoGrupo) return
+
+    const nome = nomeDoGrupo.trim()
+    if (!nome) {
+      setErroAoRenomearGrupo('Informe o nome do grupo.')
+      return
+    }
+
+    setRenomeandoGrupo(true)
+    setErroAoRenomearGrupo(null)
+    try {
+      await atualizarGrupo(grupoEmEdicao.id, { nome })
+      setGrupoEmEdicao(null)
+      setErroAoRenomearGrupo(null)
+      toast.success('Grupo renomeado.')
+      aoMudarGrupos()
+    } catch (falha) {
+      setErroAoRenomearGrupo(mensagemDeErro(falha, 'Não foi possível renomear o grupo. Tente de novo.'))
+    } finally {
+      setRenomeandoGrupo(false)
+    }
+  }
+
+  function abrirExclusaoDoGrupo(grupo: GrupoComMembros) {
+    setErroExclusaoDoGrupo(null)
+    setGrupoParaExcluir(grupo)
+  }
+
+  function fecharExclusaoDoGrupo() {
+    if (excluindoGrupo) return
+    setGrupoParaExcluir(null)
+    setErroExclusaoDoGrupo(null)
+  }
+
+  async function confirmarExclusaoDoGrupo() {
+    if (!grupoParaExcluir || excluindoGrupo) return
+
+    setExcluindoGrupo(true)
+    setErroExclusaoDoGrupo(null)
+    try {
+      await excluirGrupo(grupoParaExcluir.id)
+      setGrupoParaExcluir(null)
+      toast.success('Grupo excluído.')
+      aoMudarGrupos()
+    } catch (falha) {
+      // O 409 (grupo com integrantes) cai aqui: a mensagem da API orienta a
+      // remover os membros antes, e o modal continua aberto — nada foi apagado.
+      setErroExclusaoDoGrupo(
+        mensagemDeErro(falha, 'Não foi possível excluir o grupo. Tente de novo.'),
+      )
+    } finally {
+      setExcluindoGrupo(false)
+    }
+  }
+
   if (competicao.carregando) {
     return (
       <>
@@ -664,7 +754,12 @@ export function CompeticaoDetailPage() {
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2">
                       {listaDeGrupos.map((grupo) => (
-                        <CartaoDeGrupo key={grupo.id} grupo={grupo} />
+                        <CartaoDeGrupo
+                          key={grupo.id}
+                          grupo={grupo}
+                          onEditar={() => abrirEdicaoDoGrupo(grupo)}
+                          onExcluir={() => abrirExclusaoDoGrupo(grupo)}
+                        />
                       ))}
                     </div>
                   )}
@@ -941,6 +1036,80 @@ export function CompeticaoDetailPage() {
           </p>
         )}
       </Modal>
+
+      <Modal
+        open={grupoEmEdicao !== null}
+        onClose={fecharEdicaoDoGrupo}
+        title="Editar grupo"
+        description="O nome vale para a competição inteira e não muda quem está no grupo em cada bimestre."
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharEdicaoDoGrupo} disabled={renomeandoGrupo}>
+              Cancelar
+            </Button>
+            <Button
+              loading={renomeandoGrupo}
+              loadingText="Salvando…"
+              onClick={() => void salvarNomeDoGrupo()}
+            >
+              Salvar alterações
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field label="Nome do grupo">
+            <Input
+              name="nome-do-grupo"
+              value={nomeDoGrupo}
+              onChange={(evento) => setNomeDoGrupo(evento.target.value)}
+              disabled={renomeandoGrupo}
+            />
+          </Field>
+
+          {erroAoRenomearGrupo ? <Alert tone="erro">{erroAoRenomearGrupo}</Alert> : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={grupoParaExcluir !== null}
+        onClose={fecharExclusaoDoGrupo}
+        title="Excluir grupo"
+        description={
+          grupoParaExcluir
+            ? `O grupo "${grupoParaExcluir.nome}" será removido permanentemente. Esta ação não pode ser desfeita.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button variant="outline" onClick={fecharExclusaoDoGrupo} disabled={excluindoGrupo}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              loading={excluindoGrupo}
+              loadingText="Excluindo…"
+              onClick={() => void confirmarExclusaoDoGrupo()}
+            >
+              Excluir grupo
+            </Button>
+          </>
+        }
+      >
+        {/*
+         * O 409 (grupo com integrantes) cai aqui: a mensagem da API orienta a
+         * remover os membros antes, e o modal continua aberto — nada foi apagado.
+         */}
+        {erroExclusaoDoGrupo ? (
+          <Alert tone="erro">{erroExclusaoDoGrupo}</Alert>
+        ) : (
+          <p className="text-neutral-600 text-sm">
+            Só é possível excluir um grupo sem integrantes em nenhum bimestre.
+            Se houver algum, nada é apagado: remova os membros um a um antes de
+            excluir o grupo.
+          </p>
+        )}
+      </Modal>
     </>
   )
 }
@@ -1007,14 +1176,29 @@ function BlocoDeBimestre({
 }
 
 /**
- * O cartão do grupo, com os atalhos para os dois relatórios dele.
+ * O cartão do grupo, com os atalhos para os dois relatórios dele e as ações de
+ * editar e excluir.
  *
  * Os links ficam no cartão — e não só na aba de Relatórios — porque a tela de
  * grupos é onde o professor já está quando pergunta "esse time foi bem?". O atalho
  * é sempre o relatório **coletivo** do grupo, e não o comparado: comparar exige
  * saber que a comparação importa, e a lista da aba é onde se escolhe isso.
+ *
+ * Editar e excluir também ficam aqui: o grupo é a unidade que o professor
+ * administra nesta lista, e mandá-lo a outra tela para trocar um nome seria um
+ * desvio. O ícone de excluir não é desabilitado pelo contador de integrantes —
+ * ele conta só o bimestre em exibição, e o grupo pode ter gente em outro; quem
+ * sabe disso é a API, e o motivo aparece no modal quando ela recusa.
  */
-function CartaoDeGrupo({ grupo }: { grupo: GrupoComMembros }) {
+function CartaoDeGrupo({
+  grupo,
+  onEditar,
+  onExcluir,
+}: {
+  grupo: GrupoComMembros
+  onEditar: () => void
+  onExcluir: () => void
+}) {
   return (
     <Card>
       <CardTitle className="flex flex-wrap items-center gap-2.5">
@@ -1023,6 +1207,24 @@ function CartaoDeGrupo({ grupo }: { grupo: GrupoComMembros }) {
           {grupo.membrosGrupos.length}{' '}
           {grupo.membrosGrupos.length === 1 ? 'integrante' : 'integrantes'}
         </Badge>
+        <span className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={`Editar grupo ${grupo.nome}`}
+            onClick={onEditar}
+            className="text-neutral-400 hover:text-primary-700 hover:bg-primary-50 rounded-md p-1 transition-colors"
+          >
+            <IconeDeEdicao />
+          </button>
+          <button
+            type="button"
+            aria-label={`Excluir grupo ${grupo.nome}`}
+            onClick={onExcluir}
+            className="text-neutral-400 hover:text-accent-600 hover:bg-accent-50 rounded-md p-1 transition-colors"
+          >
+            <IconeDeLixeira />
+          </button>
+        </span>
       </CardTitle>
 
       {grupo.membrosGrupos.length > 0 ? (
