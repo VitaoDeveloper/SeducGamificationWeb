@@ -1,6 +1,7 @@
 import { api } from '../../lib/api'
 import type {
   Aluno,
+  ComponenteCurricular,
   EditarSala,
   EscolaResumo,
   Lecionamento,
@@ -84,6 +85,54 @@ export async function inscreverNaSala(
 ): Promise<Lecionamento> {
   const { data } = await api.post<Lecionamento>(`/salas/${salaId}/inscricao`, { componentes })
   return data
+}
+
+/**
+ * Adiciona um componente curricular avulso a um lecionamento.
+ *
+ * Diferente da inscrição, aqui é uma matéria de cada vez. A API recusa com 409
+ * quando já existe outra com o mesmo nome no lecionamento, e a mensagem dela é a
+ * que a tela mostra.
+ */
+export async function adicionarComponenteCurricular(
+  lecionamentoId: string,
+  nome: string,
+): Promise<ComponenteCurricular> {
+  const { data } = await api.post<ComponenteCurricular>(
+    `/lecionamentos/${lecionamentoId}/componentes-curriculares`,
+    { nome },
+  )
+  return data
+}
+
+export async function renomearComponenteCurricular(
+  id: string,
+  nome: string,
+): Promise<ComponenteCurricular> {
+  const { data } = await api.patch<ComponenteCurricular>(`/componentes-curriculares/${id}`, { nome })
+  return data
+}
+
+/**
+ * Exclui um componente curricular.
+ *
+ * A API só exclui componente sem pontuação lançada e que não seja o último do
+ * lecionamento; numa dessas recusas responde 409 com a explicação, e é ela que a
+ * tela mostra.
+ */
+export async function excluirComponenteCurricular(id: string): Promise<void> {
+  await api.delete(`/componentes-curriculares/${id}`)
+}
+
+/**
+ * Desinscreve o professor de um lecionamento.
+ *
+ * Sair remove o lecionamento e os componentes dele. A API recusa com 409 quando
+ * o lecionamento já tem competições, porque aí a cascata atingiria lançamentos e
+ * sínteses; a mensagem da recusa é a que a tela mostra.
+ */
+export async function desinscrever(lecionamentoId: string): Promise<void> {
+  await api.delete(`/lecionamentos/${lecionamentoId}`)
 }
 
 export async function listarAlunos(salaId: string): Promise<Aluno[]> {

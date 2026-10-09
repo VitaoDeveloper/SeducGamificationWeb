@@ -56,6 +56,22 @@ function detalheCom(lecionamentos: ReturnType<typeof lecionamento>[]) {
   ]
 }
 
+/**
+ * Cópia do lecionamento do professor com componentes próprios.
+ *
+ * Os testes que mutam a lista (renomear, excluir) mexem nessa cópia e não no
+ * `MEU_LECIONAMENTO` do módulo, que outros testes continuam esperando intacto
+ * com "Programação Web".
+ */
+function lecionamentoNovo() {
+  return {
+    ...MEU_LECIONAMENTO,
+    componentesCurriculares: MEU_LECIONAMENTO.componentesCurriculares.map((componente) => ({
+      ...componente,
+    })),
+  }
+}
+
 describe('SalaDetailPage', () => {
   it('mostra a sala, a escola e o ano letivo no cabeçalho', async () => {
     server.use(...detalheCom([]))
@@ -298,5 +314,210 @@ describe('SalaDetailPage', () => {
     expect(await within(dialogo).findByText(mensagem)).toBeInTheDocument()
     // E a tela continua de pé, com a sala no lugar.
     expect(screen.getByRole('heading', { name: '2º DS' })).toBeInTheDocument()
+  })
+
+  it('adiciona uma matéria a um lecionamento sem recarregar a página', async () => {
+    const pessoa = userEvent.setup()
+    // A mutação acontece no handler, como na API: o POST acrescenta o componente
+    // e o GET seguinte já devolve a lista com ele.
+    let componenteAdicionado: { id: string; lecionamentoId: string; nome: string } | null = null
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () =>
+        HttpResponse.json([
+          {
+            ...MEU_LECIONAMENTO,
+            componentesCurriculares: componenteAdicionado
+              ? [...MEU_LECIONAMENTO.componentesCurriculares, componenteAdicionado]
+              : MEU_LECIONAMENTO.componentesCurriculares,
+          },
+        ]),
+      ),
+      http.post(`${API}/lecionamentos/:id/componentes-curriculares`, async ({ params, request }) => {
+        const { nome } = (await request.json()) as { nome: string }
+        componenteAdicionado = { id: 'c-novo', lecionamentoId: String(params.id), nome }
+        return HttpResponse.json(componenteAdicionado, { status: 201 })
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    const botaoAdicionar = await screen.findByRole('button', { name: /adicionar matéria/i })
+    await pessoa.click(botaoAdicionar)
+    await pessoa.type(screen.getByLabelText(/nome da nova matéria/i), 'Matemática')
+    await pessoa.click(screen.getByRole('button', { name: /^adicionar$/i }))
+
+    // O formulário some e a matéria aparece na lista sem F5.
+    expect(await screen.findByText('Matemática')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/nome da nova matéria/i)).not.toBeInTheDocument()
+  })
+
+  it('mostra a mensagem da API ao adicionar uma matéria duplicada, sem fechar o formulário', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem =
+      'Já existe um componente curricular com esse nome neste lecionamento.'
+
+    server.use(
+      ...detalheCom([MEU_LECIONAMENTO]),
+      http.post(`${API}/lecionamentos/:id/componentes-curriculares`, () =>
+        HttpResponse.json(
+          { statusCode: 409, message: mensagem, error: 'Conflict' },
+          { status: 409 },
+        ),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /adicionar matéria/i }))
+    await pessoa.type(screen.getByLabelText(/nome da nova matéria/i), 'Programação Web')
+    await pessoa.click(screen.getByRole('button', { name: /^adicionar$/i }))
+
+    // A mensagem é a da API, e o formulário continua aberto para corrigir.
+    expect(await screen.findByText(mensagem)).toBeInTheDocument()
+    expect(screen.getByLabelText(/nome da nova matéria/i)).toBeInTheDocument()
+  })
+
+  it('renomeia uma matéria e reflete o novo nome na tela', async () => {
+    const pessoa = userEvent.setup()
+    const lecionamentos = [lecionamentoNovo()]
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json(lecionamentos)),
+      http.patch(`${API}/componentes-curriculares/:id`, async ({ params, request }) => {
+        const { nome } = (await request.json()) as { nome: string }
+        const alvo = lecionamentos[0]?.componentesCurriculares.find(
+          (componente) => componente.id === String(params.id),
+        )
+        if (alvo) alvo.nome = nome
+        return HttpResponse.json(alvo)
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /editar programação web/i }))
+    await pessoa.clear(screen.getByLabelText(/nome da matéria/i))
+    await pessoa.type(screen.getByLabelText(/nome da matéria/i), 'Programação Web II')
+    await pessoa.click(screen.getByRole('button', { name: /^salvar$/i }))
+
+    // O badge troca de nome, sem recarregar a página.
+    expect(await screen.findByText('Programação Web II')).toBeInTheDocument()
+    expect(screen.queryByText('Programação Web')).not.toBeInTheDocument()
+  })
+
+  it('exclui uma matéria sem pontuação depois da confirmação', async () => {
+    const pessoa = userEvent.setup()
+    const lecionamentos = [lecionamentoNovo()]
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json(lecionamentos)),
+      http.delete(`${API}/componentes-curriculares/:id`, ({ params }) => {
+        const alvo = lecionamentos[0]
+        if (alvo) {
+          alvo.componentesCurriculares = alvo.componentesCurriculares.filter(
+            (componente) => componente.id !== String(params.id),
+          )
+        }
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /excluir programação web/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir matéria/i }))
+
+    const tabela = await screen.findByRole('table')
+    expect(await within(tabela).findByText('Banco de Dados')).toBeInTheDocument()
+    expect(within(tabela).queryByText('Programação Web')).not.toBeInTheDocument()
+  })
+
+  it('mostra a mensagem da API ao excluir matéria com pontuação, sem removê-la', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem =
+      'Componente curricular já possui pontuação lançada e não pode ser excluído.'
+
+    server.use(
+      ...detalheCom([MEU_LECIONAMENTO]),
+      http.delete(`${API}/componentes-curriculares/:id`, () =>
+        HttpResponse.json(
+          { statusCode: 409, message: mensagem, error: 'Conflict' },
+          { status: 409 },
+        ),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /excluir programação web/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir matéria/i }))
+
+    // A mensagem vem da API e a matéria continua na lista.
+    expect(await within(dialogo).findByText(mensagem)).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('table')).getByText('Programação Web'),
+    ).toBeInTheDocument()
+  })
+
+  it('desinscreve-se de uma sala sem competições e o lecionamento some da lista', async () => {
+    const pessoa = userEvent.setup()
+    const lista = [MEU_LECIONAMENTO]
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json([SALA])),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json(lista)),
+      http.delete(`${API}/lecionamentos/:id`, () => {
+        lista.length = 0
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /sair desta sala/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /sair desta sala/i }))
+
+    // Sem lecionamento, a tela volta ao caso "ainda não leciona".
+    expect(await screen.findByText('Ainda não leciona nesta sala')).toBeInTheDocument()
+    expect(screen.getByText('Nenhum professor inscrito nesta sala ainda.')).toBeInTheDocument()
+  })
+
+  it('mostra a mensagem da API ao tentar sair da sala com competições', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem = 'Lecionamento possui competições vinculadas e não pode ser desinscrito.'
+
+    server.use(
+      ...detalheCom([MEU_LECIONAMENTO]),
+      http.delete(`${API}/lecionamentos/:id`, () =>
+        HttpResponse.json(
+          { statusCode: 409, message: mensagem, error: 'Conflict' },
+          { status: 409 },
+        ),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+
+    await pessoa.click(await screen.findByRole('button', { name: /sair desta sala/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /sair desta sala/i }))
+
+    // A mensagem vem da API e o professor continua inscrito.
+    expect(await within(dialogo).findByText(mensagem)).toBeInTheDocument()
+    expect(screen.getByText('Você leciona aqui')).toBeInTheDocument()
   })
 })
