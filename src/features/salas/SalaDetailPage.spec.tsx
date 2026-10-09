@@ -10,10 +10,12 @@ import {
   ESCOLA_A,
   PROFESSOR_DE_TESTE,
   TOKEN_DE_TESTE,
+  escolasVinculadas,
   lecionamento,
   sala,
 } from '../../test/handlers'
 import { SalaDetailPage } from './SalaDetailPage'
+import { SalasListPage } from './SalasListPage'
 
 const SALA = sala({ id: 'sala-1', nome: '2º DS', anoLetivo: 2026, escola: ESCOLA_A })
 
@@ -202,5 +204,99 @@ describe('SalaDetailPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Erro interno do servidor.')
     expect(screen.getByText('Ainda não leciona nesta sala')).toBeInTheDocument()
+  })
+
+  it('edita a sala em um formulário pré-preenchido e reflete o novo nome', async () => {
+    const pessoa = userEvent.setup()
+    let corpoEnviado: unknown
+    const lista = [SALA]
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json(lista)),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json([])),
+      http.patch(`${API}/salas/:salaId`, async ({ request }) => {
+        corpoEnviado = await request.json()
+        const atualizada = sala({ ...SALA, nome: '3º DS' })
+        lista[0] = atualizada
+        return HttpResponse.json(atualizada)
+      }),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+    await pessoa.click(await screen.findByRole('button', { name: /^editar$/i }))
+
+    // O formulário abre com o que a sala já tem, e sem a escolha de escola.
+    expect(screen.getByRole('heading', { name: 'Editar sala' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/nome da sala/i)).toHaveValue('2º DS')
+    expect(screen.getByLabelText(/ano letivo/i)).toHaveValue(2026)
+    expect(screen.getByLabelText(/^escola/i)).toBeDisabled()
+
+    await pessoa.clear(screen.getByLabelText(/nome da sala/i))
+    await pessoa.type(screen.getByLabelText(/nome da sala/i), '3º DS')
+    await pessoa.click(screen.getByRole('button', { name: /salvar alterações/i }))
+
+    // O cabeçalho passa a mostrar o nome novo, e o formulário some.
+    expect(await screen.findByRole('heading', { name: '3º DS' })).toBeInTheDocument()
+    expect(corpoEnviado).toEqual({ nome: '3º DS', anoLetivo: 2026 })
+    expect(screen.queryByLabelText(/nome da sala/i)).not.toBeInTheDocument()
+  })
+
+  it('exclui a sala vazia depois da confirmação e volta para a listagem', async () => {
+    const pessoa = userEvent.setup()
+    const lista = [SALA]
+
+    server.use(
+      http.get(`${API}/salas`, () => HttpResponse.json(lista)),
+      http.get(`${API}/salas/:salaId/lecionamentos`, () => HttpResponse.json([])),
+      http.delete(`${API}/salas/:salaId`, () => {
+        lista.length = 0
+        return new HttpResponse(null, { status: 204 })
+      }),
+      escolasVinculadas(),
+    )
+    abrirSessao()
+
+    renderComSessao(
+      <Routes>
+        <Route path="/salas/:salaId" element={<SalaDetailPage />} />
+        <Route path="/salas" element={<SalasListPage />} />
+      </Routes>,
+      `/salas/${SALA.id}`,
+    )
+
+    await pessoa.click(await screen.findByRole('button', { name: /excluir sala/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir sala/i }))
+
+    // A navegação remonta a listagem, que relê `GET /salas` já sem a sala.
+    expect(await screen.findByText('Nenhuma sala por aqui')).toBeInTheDocument()
+  })
+
+  it('mostra a mensagem exata da API quando a sala tem dependentes, sem quebrar', async () => {
+    const pessoa = userEvent.setup()
+    const mensagem =
+      'Não é possível excluir a sala: há alunos matriculados ou professores inscritos.'
+
+    server.use(
+      ...detalheCom([]),
+      http.delete(`${API}/salas/:salaId`, () =>
+        HttpResponse.json(
+          { statusCode: 409, message: mensagem, error: 'Conflict' },
+          { status: 409 },
+        ),
+      ),
+    )
+    abrirSessao()
+
+    renderizarDetalhe()
+    await pessoa.click(await screen.findByRole('button', { name: /excluir sala/i }))
+    const dialogo = await screen.findByRole('dialog')
+    await pessoa.click(within(dialogo).getByRole('button', { name: /excluir sala/i }))
+
+    // A mensagem vem do servidor, que é quem sabe qual bloqueio se aplica.
+    expect(await within(dialogo).findByText(mensagem)).toBeInTheDocument()
+    // E a tela continua de pé, com a sala no lugar.
+    expect(screen.getByRole('heading', { name: '2º DS' })).toBeInTheDocument()
   })
 })

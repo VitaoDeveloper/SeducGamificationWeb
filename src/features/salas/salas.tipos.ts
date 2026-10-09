@@ -83,6 +83,19 @@ export interface NovaSala {
   escolaId: string
 }
 
+/**
+ * Corpo de `PATCH /salas/:id`.
+ *
+ * `escolaId` fica de fora de propósito: a sala pertence à escola em que foi
+ * criada, e mudar de escola significaria rematricular todos os alunos e
+ * recomeçar as competições. A API não aceita a troca, então o corpo nem a
+ * carrega.
+ */
+export interface EditarSala {
+  nome: string
+  anoLetivo: number
+}
+
 export interface NovoAluno {
   nome: string
 }

@@ -2,14 +2,16 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Alert, Button, Card, Field, Input, Select } from '../../components'
 import { mensagemDeErro } from '../../lib/erro-api'
-import { criarSala } from './salas.api'
+import { atualizarSala, criarSala } from './salas.api'
 import type { EscolaResumo, Sala } from './salas.tipos'
 
 export interface NovaSalaFormProps {
-  /** Escolas às quais o professor está vinculado, sem repetir. */
-  escolas: EscolaResumo[]
-  /** Chamado depois que a API devolve a sala criada. */
-  onCriada: (sala: Sala) => void
+  /** Escolas às quais o professor está vinculado, sem repetir. Só na criação. */
+  escolas?: EscolaResumo[]
+  /** Sala em edição. Sem ela, o formulário cria uma sala nova. */
+  sala?: Sala
+  /** Recebe a sala criada, ou a atualizada quando há `sala`. */
+  onSalva: (sala: Sala) => void
   onCancelar: () => void
 }
 
@@ -31,12 +33,17 @@ const ANO_MINIMO = 2000
 const ANO_MAXIMO = 2100
 
 /**
- * Formulário de criação de sala, dentro de um card.
+ * Formulário de sala, dentro de um card.
  *
- * O campo de escola só aparece quando há mais de uma: com uma única escola
- * vinculada, a escolha é automática e um select com uma opção só seria um
- * campo a mais para o professor atravessar. Ainda assim a escola entra no
- * corpo enviado, porque é ela que a API exige.
+ * O mesmo formulário cria e edita: sem `sala`, cria; com `sala`, edita. O que
+ * muda é o envio (`POST` ou `PATCH`) e o campo de escola — na edição ele não
+ * é uma escolha, porque a sala não troca de escola, e aparece só para o
+ * professor confirmar onde a turma está.
+ *
+ * Na criação, o campo de escola só aparece quando há mais de uma vinculada:
+ * com uma única escola, a escolha é automática e um select com uma opção só
+ * seria um campo a mais para o professor atravessar. Ainda assim a escola entra
+ * no corpo enviado, porque é ela que a API exige.
  *
  * A lista vem de `GET /escolas`, que devolve exatamente as escolas às quais o
  * professor está vinculado. Lista vazia aqui quer dizer uma coisa só — não há
@@ -44,15 +51,15 @@ const ANO_MAXIMO = 2100
  * criação é impossível mesmo: sem escola, o `POST /salas` não tem o que
  * mandar.
  */
-export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProps) {
-  const [nome, setNome] = useState('')
-  const [anoLetivo, setAnoLetivo] = useState(String(new Date().getFullYear()))
+export function NovaSalaForm({ escolas = [], sala, onSalva, onCancelar }: NovaSalaFormProps) {
+  const [nome, setNome] = useState(sala?.nome ?? '')
+  const [anoLetivo, setAnoLetivo] = useState(String(sala?.anoLetivo ?? new Date().getFullYear()))
   const [escolaId, setEscolaId] = useState(escolas.length === 1 ? (escolas[0] as EscolaResumo).id : '')
   const [erros, setErros] = useState<ErrosDoFormulario>({})
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
-  const semEscolas = escolas.length === 0
+  const semEscolas = !sala && escolas.length === 0
 
   async function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
@@ -70,7 +77,7 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
       novosErros.anoLetivo = `O ano letivo deve estar entre ${ANO_MINIMO} e ${ANO_MAXIMO}.`
     }
 
-    if (escolas.length > 1 && !escolaId) {
+    if (!sala && escolas.length > 1 && !escolaId) {
       novosErros.escolaId = 'Escolha a escola.'
     }
 
@@ -80,26 +87,39 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
 
     setEnviando(true)
     try {
-      const sala = await criarSala({
-        nome: nome.trim(),
-        anoLetivo: ano,
-        // `escolas[0]` é a única opção quando o select não aparece, e o length
-        // acima já garantindo que a lista não está vazia.
-        escolaId: escolaId || (escolas[0] as EscolaResumo).id,
-      })
-      onCriada(sala)
+      if (sala) {
+        const atualizada = await atualizarSala(sala.id, { nome: nome.trim(), anoLetivo: ano })
+        onSalva(atualizada)
+      } else {
+        const criada = await criarSala({
+          nome: nome.trim(),
+          anoLetivo: ano,
+          // `escolas[0]` é a única opção quando o select não aparece, e o
+          // `semEscolas` acima já garante que a lista não está vazia.
+          escolaId: escolaId || (escolas[0] as EscolaResumo).id,
+        })
+        onSalva(criada)
+      }
     } catch (erro) {
-      setErroGeral(mensagemDeErro(erro, 'Não foi possível criar a sala. Tente de novo.'))
+      setErroGeral(
+        mensagemDeErro(
+          erro,
+          sala
+            ? 'Não foi possível salvar as alterações. Tente de novo.'
+            : 'Não foi possível criar a sala. Tente de novo.',
+        ),
+      )
       setEnviando(false)
     }
   }
 
   return (
     <Card tone="accent" bar="left" className="max-w-2xl">
-      <h2 className="text-lg font-semibold">Nova sala</h2>
+      <h2 className="text-lg font-semibold">{sala ? 'Editar sala' : 'Nova sala'}</h2>
       <p className="text-neutral-500 mt-1.5 text-sm">
-        Criar a sala não te inscreve nela. Depois de criar, você se inscreve
-        informando os componentes que leciona — é o que dá origem à competição.
+        {sala
+          ? 'A escola não muda: a sala pertence à escola em que foi criada. Você pode ajustar o nome e o ano letivo.'
+          : 'Criar a sala não te inscreve nela. Depois de criar, você se inscreve informando os componentes que leciona — é o que dá origem à competição.'}
       </p>
 
       <form onSubmit={enviar} noValidate className="mt-5 space-y-4">
@@ -113,7 +133,11 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
           </Alert>
         ) : null}
 
-        {escolas.length > 1 ? (
+        {sala ? (
+          <Field label="Escola" hint="A sala não troca de escola.">
+            <Input name="escola" value={sala.escola.nome} readOnly disabled />
+          </Field>
+        ) : escolas.length > 1 ? (
           <Field label="Escola" error={erros.escolaId} required>
             <Select
               name="escolaId"
@@ -168,10 +192,10 @@ export function NovaSalaForm({ escolas, onCriada, onCancelar }: NovaSalaFormProp
           <Button
             type="submit"
             loading={enviando}
-            loadingText="Criando..."
+            loadingText={sala ? 'Salvando...' : 'Criando...'}
             disabled={semEscolas}
           >
-            Criar sala
+            {sala ? 'Salvar alterações' : 'Criar sala'}
           </Button>
           <Button variant="outline" onClick={onCancelar} disabled={enviando}>
             Cancelar

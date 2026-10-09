@@ -68,7 +68,7 @@ export function SalasListPage() {
           escolasCarregadas ? (
             <NovaSalaForm
               escolas={escolasVinculadas.dados ?? []}
-              onCriada={aoCriarSala}
+              onSalva={aoCriarSala}
               onCancelar={() => setCriando(false)}
             />
           ) : (

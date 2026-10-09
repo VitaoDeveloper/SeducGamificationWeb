@@ -1,5 +1,13 @@
 import { api } from '../../lib/api'
-import type { Aluno, EscolaResumo, Lecionamento, NovaSala, NovoAluno, Sala } from './salas.tipos'
+import type {
+  Aluno,
+  EditarSala,
+  EscolaResumo,
+  Lecionamento,
+  NovaSala,
+  NovoAluno,
+  Sala,
+} from './salas.tipos'
 
 /**
  * Chamadas de sala, lecionamento e aluno.
@@ -31,6 +39,31 @@ export async function listarEscolas(): Promise<EscolaResumo[]> {
 export async function criarSala(nova: NovaSala): Promise<Sala> {
   const { data } = await api.post<Sala>('/salas', nova)
   return data
+}
+
+/**
+ * Atualiza nome e ano letivo da sala.
+ *
+ * A escola não vai no corpo: a sala não troca de escola, e a API recusaria a
+ * troca. A resposta é a sala inteira já atualizada, que é o que a tela usa para
+ * repor o cabeçalho sem uma nova leitura.
+ */
+export async function atualizarSala(id: string, alteracoes: EditarSala): Promise<Sala> {
+  const { data } = await api.patch<Sala>(`/salas/${id}`, alteracoes)
+  return data
+}
+
+/**
+ * Exclui a sala.
+ *
+ * A API só exclui sala vazia — sem alunos e sem lecionamentos. Quando há
+ * qualquer um dos dois, responde `409` com a explicação, e é essa mensagem que
+ * a tela mostra: só o servidor sabe qual dos bloqueios se aplica, e
+ * reinterpretá-lo aqui seria adivinhar qual. O retorno é vazio (a resposta é
+ * `204`).
+ */
+export async function excluirSala(id: string): Promise<void> {
+  await api.delete(`/salas/${id}`)
 }
 
 export async function listarLecionamentos(salaId: string): Promise<Lecionamento[]> {
