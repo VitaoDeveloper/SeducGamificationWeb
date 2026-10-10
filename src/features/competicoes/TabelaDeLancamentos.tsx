@@ -1,9 +1,17 @@
 import { useState } from 'react'
-import { Alert, Button, Input, Select, Table, useToast } from '../../components'
+import {
+  Alert,
+  Button,
+  IconeDeLixeira,
+  Input,
+  Select,
+  Table,
+  useToast,
+} from '../../components'
 import type { TableColumn } from '../../components'
 import { formatarSintese } from '../../lib/sinteseCalculo'
 import { mensagemDeErro } from '../../lib/erro-api'
-import { lancarNota, lancarNotasEmLote } from './componentes-pontuacao.api'
+import { excluirLancamento, lancarNota, lancarNotasEmLote } from './componentes-pontuacao.api'
 import { useLancamentos, useLancamentosDeComponentes } from './componentes-pontuacao.hooks'
 import { sinteseDaMateriaPorAluno } from './previa-sintese'
 import { validarNotas } from './notas'
@@ -94,6 +102,7 @@ export function TabelaDeLancamentos({
   const [erroGeral, setErroGeral] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [salvandoAluno, setSalvandoAluno] = useState<string | null>(null)
+  const [excluindoAluno, setExcluindoAluno] = useState<string | null>(null)
 
   const salvosPorAluno = new Map<string, string>()
   for (const lancamento of lancamentos.dados ?? []) {
@@ -260,6 +269,36 @@ export function TabelaDeLancamentos({
     }
   }
 
+  async function excluirLancamentoDaLinha(aluno: Aluno) {
+    if (excluindoAluno) return
+
+    const temNotaSalva = salvosPorAluno.has(aluno.id)
+    if (!temNotaSalva) {
+      return
+    }
+
+    const confirmou = window.confirm(
+      `Excluir a nota de ${aluno.nome}? Essa ação não pode ser desfeita - o professor pode relançar a nota depois.`,
+    )
+    if (!confirmou) {
+      return
+    }
+
+    setExcluindoAluno(aluno.id)
+    setErroGeral(null)
+    try {
+      await excluirLancamento(componente.id, aluno.id)
+      setEditados((atuais) => semChave(atuais, aluno.id))
+      setErros((atuais) => semChave(atuais, aluno.id))
+      lancamentos.recarregar()
+      toast.success(`Nota de ${aluno.nome} excluída.`)
+    } catch (falha) {
+      setErroGeral(mensagemDeErro(falha, `Não foi possível excluir a nota de ${aluno.nome}.`))
+    } finally {
+      setExcluindoAluno(null)
+    }
+  }
+
   const numerico = ehEscalaNumerica(modeloDaEscola)
 
   const linhas: LinhaDeLancamento[] = alunos.map((aluno) => {
@@ -369,22 +408,39 @@ export function TabelaDeLancamentos({
     },
     ...(encerrado ? [] : [colunaPrevia]),
     {
-      key: 'salvar',
-      header: <span className="sr-only">Salvar a nota desta linha</span>,
-      className: 'w-36',
+      key: 'acoes',
+      header: <span className="sr-only">Ações da nota desta linha</span>,
+      className: 'w-44',
       align: 'right',
-      cell: (linha) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => salvarLinha(linha.aluno)}
-          disabled={encerrado || !linha.editada || salvandoAluno !== null}
-          loading={salvandoAluno === linha.aluno.id}
-          loadingText="Salvando…"
-        >
-          Salvar
-        </Button>
-      ),
+      cell: (linha) => {
+        const temNotaSalva = salvosPorAluno.has(linha.aluno.id)
+        const podeExcluir = !encerrado && temNotaSalva && excluindoAluno === null
+
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              aria-label={`Excluir nota de ${linha.aluno.nome}`}
+              onClick={() => excluirLancamentoDaLinha(linha.aluno)}
+              disabled={!podeExcluir}
+              className="text-neutral-400 hover:text-accent-600 hover:bg-accent-50 rounded-md p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              title="Excluir lançamento"
+            >
+              <IconeDeLixeira />
+            </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => salvarLinha(linha.aluno)}
+              disabled={encerrado || !linha.editada || salvandoAluno !== null}
+              loading={salvandoAluno === linha.aluno.id}
+              loadingText="Salvando…"
+            >
+              Salvar
+            </Button>
+          </div>
+        )
+      },
     },
   ]
 

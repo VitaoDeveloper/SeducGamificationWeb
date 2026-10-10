@@ -559,4 +559,81 @@ describe('TabelaDeLancamentos', () => {
       ).toBeInTheDocument()
     })
   })
+
+  describe('exclusão de lançamento', () => {
+    const PROVA = componentePontuacao({
+      id: 'cp-1',
+      nome: 'Prova',
+      pesoPercentual: 50,
+      componenteCurricularId: 'mat-1',
+    })
+
+    const MATERIA_COM_DOIS = materiaDe([
+      { id: 'cp-1', nome: 'Prova', pesoPercentual: 50 },
+      { id: 'cp-2', nome: 'Trabalho', pesoPercentual: 50 },
+    ])
+
+    function previaEsperadaDaAna(notaDaProva: string | undefined): string {
+      return formatarSintese(
+        sinteseDaMateria(
+          [
+            { valorNoModelo: notaDaProva, pesoPercentual: 50 },
+            { valorNoModelo: '8', pesoPercentual: 50 },
+          ],
+          { tipoEscala: 'NUMERICA', niveis: [] },
+        ),
+      )
+    }
+
+    it('exclui um lançamento: campo volta a vazio, prévia recalcula', async () => {
+      const pessoa = userEvent.setup()
+      window.confirm = vi.fn(() => true)
+      server.use(...lancamentosDoComponente([lancamento('cp-1', ANA, '9'), lancamento('cp-2', ANA, '8')], ALUNOS))
+
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA_COM_DOIS}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado={false}
+        />,
+      )
+
+      const linhaDaAna = await screen.findByRole('row', { name: /Ana/ })
+      const campo = within(linhaDaAna).getByLabelText('Nota de Ana')
+      expect(campo).toHaveValue(9)
+
+      const botaoExcluir = within(linhaDaAna).getByRole('button', { name: /excluir nota de ana/i })
+      expect(botaoExcluir).toBeEnabled()
+
+      await pessoa.click(botaoExcluir)
+
+      await waitFor(() => expect(campo).toHaveValue(null))
+      expect(within(linhaDaAna).getByText(previaEsperadaDaAna(undefined))).toBeInTheDocument()
+      expect(await screen.findByText('Nota de Ana excluída.')).toBeInTheDocument()
+    })
+
+    it('excluir num bimestre encerrado: ação não disponível', async () => {
+      window.confirm = vi.fn(() => true)
+      server.use(...lancamentosDoComponente([lancamento('cp-1', ANA, '9')], ALUNOS))
+
+      renderComSessao(
+        <TabelaDeLancamentos
+          componente={PROVA}
+          materia={MATERIA}
+          alunos={ALUNOS}
+          modelo={MODELO_NUMERICO}
+          encerrado
+        />,
+      )
+
+      await screen.findByLabelText('Nota de Ana')
+      expect(screen.getByLabelText('Nota de Ana')).toBeDisabled()
+      const linhaDaAna = screen.getByRole('row', { name: /Ana/ })
+      const botaoExcluir = within(linhaDaAna).getByRole('button', { name: /excluir nota de ana/i })
+      expect(botaoExcluir).toBeDisabled()
+      expect(window.confirm).not.toHaveBeenCalled()
+    })
+  })
 })

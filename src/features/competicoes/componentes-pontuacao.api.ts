@@ -124,3 +124,10 @@ export async function atualizarComponentePontuacao(
 export async function excluirComponentePontuacao(id: string): Promise<void> {
   await api.delete(`/componentes-pontuacao/${id}`)
 }
+
+export async function excluirLancamento(
+  componentePontuacaoId: string,
+  alunoId: string,
+): Promise<void> {
+  await api.delete(`/componentes-pontuacao/${componentePontuacaoId}/lancamentos/${alunoId}`)
+}

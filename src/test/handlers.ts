@@ -515,6 +515,19 @@ export function lancamentosDoComponente(notas: Lancamento[], alunos: Aluno[] = [
 
       return HttpResponse.json(salvos, { status: 201 })
     }),
+    http.delete(`${API}/componentes-pontuacao/:id/lancamentos/:alunoId`, ({ params }) => {
+      const componenteId = String(params.id)
+      const alunoId = String(params.alunoId)
+      const indice = notas.findIndex(
+        (nota) => nota.componentePontuacaoId === componenteId && nota.alunoId === alunoId,
+      )
+
+      if (indice >= 0) {
+        notas.splice(indice, 1)
+      }
+
+      return new HttpResponse(null, { status: 204 })
+    }),
   ]
 }
 
