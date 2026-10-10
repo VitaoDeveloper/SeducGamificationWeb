@@ -118,7 +118,11 @@ export interface LancarNota {
   valorNoModelo: string
 }
 
-/** Corpo de `POST /componentes-pontuacao/:id/lancamentos/lote`. */
 export interface LoteDeLancamentos {
   lancamentos: LancarNota[]
+}
+
+export interface EditarComponentePontuacao {
+  nome?: string
+  pesoPercentual?: number
 }

@@ -2,6 +2,7 @@ import { api } from '../../lib/api'
 import type {
   ComponentePontuacao,
   ComponentesDoBimestre,
+  EditarComponentePontuacao,
   Lancamento,
   LancamentoCriado,
   LancarNota,
@@ -110,4 +111,16 @@ export async function lancarNotasEmLote(
     corpo,
   )
   return data
+}
+
+export async function atualizarComponentePontuacao(
+  id: string,
+  dados: Partial<EditarComponentePontuacao>,
+): Promise<ComponentePontuacao> {
+  const { data } = await api.patch<ComponentePontuacao>(`/componentes-pontuacao/${id}`, dados)
+  return data
+}
+
+export async function excluirComponentePontuacao(id: string): Promise<void> {
+  await api.delete(`/componentes-pontuacao/${id}`)
 }
